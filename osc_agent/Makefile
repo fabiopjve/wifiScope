@@ -8,7 +8,7 @@ GDB=$(PREFIX)gdb
 OBJCOPY=$(PREFIX)objcopy
 OBJDUMP=$(PREFIX)objdump
 
-osc_agent: osc_agent.o
+osc_agent: osc_agent.o queue.o
 	$(CC) -o osc_agent osc_agent.o
 
 clean:
