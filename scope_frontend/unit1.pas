@@ -11,7 +11,6 @@ uses
 type
 
   { TForm1 }
-
   TForm1 = class(TForm)
     Button2: TButton;
     Chart1: TChart;

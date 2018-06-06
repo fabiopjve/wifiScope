@@ -22,8 +22,7 @@ type
     procedure Button2Click(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure FormResize(Sender: TObject);
-    procedure Label1Click(Sender: TObject);
-    procedure Serial1RxData(Sender: TObject);
+    //procedure Serial1RxData(Sender: TObject);
   private
 
   public
