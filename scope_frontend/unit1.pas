@@ -6,21 +6,31 @@ interface
 
 uses
   Classes, SysUtils, FileUtil, TAGraph, TASources, TASeries, Forms, Controls,
-  Graphics, Dialogs, StdCtrls, Grids, LazSerial;
+  Graphics, Dialogs, StdCtrls, ExtCtrls, Spin, LazSerial,
+  lNetComponents, lNet;
 
 type
 
   { TForm1 }
   TForm1 = class(TForm)
+    Button1: TButton;
     Button2: TButton;
     Chart1: TChart;
     Chart1LineSeries1: TLineSeries;
-    Label2: TLabel;
+    ComboBox1: TComboBox;
+    GroupBox1: TGroupBox;
+    GroupBox2: TGroupBox;
+    Label1: TLabel;
+    LTCPComponent1: TLTCPComponent;
+    SpinEdit1: TSpinEdit;
+    udp: TLUDPComponent;
+    Memo1: TMemo;
     SaveDialog1: TSaveDialog;
     sr1: TListChartSource;
     procedure Button2Click(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure FormResize(Sender: TObject);
+    procedure udpReceive(aSocket: TLSocket);
     //procedure Serial1RxData(Sender: TObject);
   private
 
@@ -61,14 +71,37 @@ procedure TForm1.FormCreate(Sender: TObject);
 begin
   str := '';
   xAxis := 0;
+  udp.Listen(19743);
 end;
 
 procedure TForm1.FormResize(Sender: TObject);
 begin
-     if Form1.Width<900 then Form1.Width:=900;
-     if Form1.Height<499 then Form1.Height:=499;
-     Chart1.Width:=Form1.Width;
-     Chart1.Height:=Form1.Height-90;
+     if Form1.Width<815 then Form1.Width:=815;
+     if Form1.Height<500 then Form1.Height:=500;
+     //Chart1.Width:=Form1.Width;
+     //Chart1.Height:=Form1.Height-90;
+end;
+
+procedure TForm1.udpReceive(aSocket: TLSocket);
+var
+   rcv : array[1..30] of byte;
+   size : integer;
+   index : integer;
+   tmp: string;
+begin
+     //Memo1.Append();
+     //udp.
+   tmp := '';
+   size := aSocket.Get(rcv,20);
+   tmp:= 'Size='+intToStr(size);
+   index := 1;
+   while (size>0) do
+   begin
+        tmp := tmp + ' ' + intToStr(rcv[index]);
+        dec(size);
+        inc(index);
+   end;
+   Memo1.Append(tmp);
 end;
 
 

@@ -1,7 +1,7 @@
 object Form1: TForm1
-  Left = 405
+  Left = 391
   Height = 499
-  Top = 150
+  Top = 124
   Width = 929
   Caption = 'Wireless Scope'
   ClientHeight = 499
@@ -11,9 +11,9 @@ object Form1: TForm1
   LCLVersion = '1.8.2.0'
   object Chart1: TChart
     Left = 0
-    Height = 408
-    Top = 91
-    Width = 929
+    Height = 499
+    Top = 0
+    Width = 633
     AxisList = <    
       item
         Grid.Color = clWhite
@@ -47,32 +47,91 @@ object Form1: TForm1
     end
   end
   object Button2: TButton
-    Left = 408
+    Left = 800
     Height = 25
-    Top = 40
+    Top = 216
     Width = 112
     Caption = 'Save CSV graph'
     OnClick = Button2Click
     TabOrder = 1
   end
-  object Label2: TLabel
-    Left = 792
-    Height = 73
-    Top = 8
-    Width = 120
-    Caption = '9999'
-    Font.Color = clRed
-    Font.Height = -53
-    Font.Style = [fsBold]
+  object Memo1: TMemo
+    Left = 688
+    Height = 88
+    Top = 376
+    Width = 232
+    Lines.Strings = (
+      'Memo1'
+    )
+    ScrollBars = ssAutoBoth
+    TabOrder = 2
+  end
+  object Label1: TLabel
+    Left = 640
+    Height = 17
+    Top = 480
+    Width = 289
+    AutoSize = False
+    Caption = 'Label1'
     ParentColor = False
-    ParentFont = False
+  end
+  object SpinEdit1: TSpinEdit
+    Left = 728
+    Height = 27
+    Top = 328
+    Width = 104
+    TabOrder = 3
+  end
+  object ComboBox1: TComboBox
+    Left = 692
+    Height = 29
+    Top = 255
+    Width = 156
+    AutoSize = False
+    ItemHeight = 0
+    Items.Strings = (
+      '0.1 sec'
+      '10 msec'
+      '1 msec'
+      '100 usec'
+    )
+    TabOrder = 4
+    Text = 'ComboBox1'
+  end
+  object Button1: TButton
+    Left = 800
+    Height = 25
+    Top = 16
+    Width = 75
+    Caption = 'Button1'
+    TabOrder = 5
+  end
+  object GroupBox1: TGroupBox
+    Left = 656
+    Height = 105
+    Top = 72
+    Width = 185
+    Caption = 'Trigger'
+    Color = clGreen
+    ParentColor = False
+    TabOrder = 6
   end
   object sr1: TListChartSource
-    left = 496
-    top = 72
+    left = 88
   end
   object SaveDialog1: TSaveDialog
-    left = 536
-    top = 72
+    left = 128
+  end
+  object udp: TLUDPComponent
+    Port = 19743
+    OnReceive = udpReceive
+    Timeout = 0
+    left = 48
+  end
+  object LTCPComponent1: TLTCPComponent
+    Port = 0
+    Timeout = 0
+    ReuseAddress = False
+    left = 168
   end
 end

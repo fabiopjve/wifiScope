@@ -21,16 +21,19 @@
         <FormatVersion Value="1"/>
       </local>
     </RunParams>
-    <RequiredPackages Count="3">
+    <RequiredPackages Count="4">
       <Item1>
-        <PackageName Value="TAChartLazarusPkg"/>
+        <PackageName Value="lnetvisual"/>
       </Item1>
       <Item2>
-        <PackageName Value="LazSerialPort"/>
+        <PackageName Value="TAChartLazarusPkg"/>
       </Item2>
       <Item3>
-        <PackageName Value="LCL"/>
+        <PackageName Value="LazSerialPort"/>
       </Item3>
+      <Item4>
+        <PackageName Value="LCL"/>
+      </Item4>
     </RequiredPackages>
     <Units Count="2">
       <Unit0>
