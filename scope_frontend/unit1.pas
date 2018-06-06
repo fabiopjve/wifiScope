@@ -13,34 +13,16 @@ type
   { TForm1 }
 
   TForm1 = class(TForm)
-    Button1: TButton;
     Button2: TButton;
-    Button3: TButton;
-    Button4: TButton;
-    Button5: TButton;
-    Button6: TButton;
     Chart1: TChart;
     Chart1LineSeries1: TLineSeries;
-    Edit1: TEdit;
-    Edit2: TEdit;
-    Label1: TLabel;
     Label2: TLabel;
-    Memo1: TMemo;
-    resetGraph: TCheckBox;
     SaveDialog1: TSaveDialog;
     sr1: TListChartSource;
-    Serial1: TLazSerial;
-    procedure Button1Click(Sender: TObject);
     procedure Button2Click(Sender: TObject);
-    procedure Button3Click(Sender: TObject);
-    procedure Button4Click(Sender: TObject);
-    procedure Button5Click(Sender: TObject);
-    procedure Button6Click(Sender: TObject);
-    procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
     procedure FormCreate(Sender: TObject);
     procedure FormResize(Sender: TObject);
-    procedure Label1Click(Sender: TObject);
-    procedure Serial1RxData(Sender: TObject);
+    //procedure Serial1RxData(Sender: TObject);
   private
 
   public
@@ -90,20 +72,9 @@ begin
      Chart1.Height:=Form1.Height-90;
 end;
 
-procedure TForm1.Label1Click(Sender: TObject);
-begin
 
-end;
 
-procedure TForm1.Button1Click(Sender: TObject);
-begin
-  Serial1.WriteData('sample'+Char(13));
-  if (resetGraph.Checked) then
-  begin
-       sr1.Clear;
-       xAxis:=0;
-  end;
-end;
+
 
 procedure TForm1.Button2Click(Sender: TObject);
 begin
@@ -113,44 +84,11 @@ begin
      end;
 end;
 
-procedure TForm1.Button3Click(Sender: TObject);
-begin
-  try
-    Serial1.Device:=Edit1.Text;
-    Serial1.BaudRate:=br115200;
-    Serial1.Active:=true;
-    Serial1.Open;
-    Serial1.WriteData(Chr(13));
-  finally
-  end;
-end;
 
-procedure TForm1.Button4Click(Sender: TObject);
-begin
-  Serial1.Active:=false;
-  Serial1.Close;
-end;
 
-procedure TForm1.Button5Click(Sender: TObject);
-begin
-  if Serial1.Active then
-  begin
-       Serial1.WriteData('s 1'+Chr(13));
-  end;
-end;
 
-procedure TForm1.Button6Click(Sender: TObject);
-begin
-  if Serial1.Active then
-  begin
-       Serial1.WriteData('s 0'+Chr(13));
-  end;
-end;
 
-procedure TForm1.FormClose(Sender: TObject; var CloseAction: TCloseAction);
-begin
-  Serial1.Close;
-end;
+{
 
 procedure TForm1.Serial1RxData(Sender: TObject);
 var
@@ -197,6 +135,6 @@ begin
     end;
   end;
 end;
-
+}
 end.
 
