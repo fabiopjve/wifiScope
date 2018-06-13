@@ -15,6 +15,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/ioctl.h>
 
 #define BUFSIZE 1024
 
@@ -35,6 +36,11 @@ void error(char *msg) {
   perror(msg);
   exit(1);
 }
+
+int sampleRate = 0;
+int triggerLevel = 0;
+int triggerMode = 0;
+int isSampling = 0;
 
 int main(int argc, char **argv) {
   int parentfd; /* parent socket */
@@ -61,9 +67,14 @@ int main(int argc, char **argv) {
   /* 
    * socket: create the parent socket 
    */
+  int temp = 1;
   parentfd = socket(AF_INET, SOCK_STREAM, 0);
-  if (parentfd < 0) 
-    error("ERROR opening socket");
+  if (parentfd < 0) error("ERROR opening socket");
+
+  if (ioctl(parentfd, FIONBIO, &temp) < 0) {
+    perror("ioctl F_SETFL, FNDELAY");
+    exit(1);
+  }  
 
   /* setsockopt: Handy debugging trick that lets 
    * us rerun the server immediately after we kill it; 
@@ -108,14 +119,16 @@ int main(int argc, char **argv) {
      * accept: wait for a connection request 
      */
     printf("Waiting\n");
-    childfd = accept(parentfd, (struct sockaddr *) &clientaddr, &clientlen);
-    if (childfd < 0) error("ERROR on accept");
+    childfd = -1;
+    while (childfd<0) childfd = accept(parentfd, (struct sockaddr *) &clientaddr, &clientlen);
+    printf("Accept returned: %i \n",childfd);
+    if (childfd < 0) error("ERROR on accept\n");
     
     /* 
      * gethostbyaddr: determine who sent the message 
      */
     hostp = gethostbyaddr((const char *)&clientaddr.sin_addr.s_addr, sizeof(clientaddr.sin_addr.s_addr), AF_INET);
-    if (hostp == NULL) error("ERROR on gethostbyaddr");
+    if (hostp == NULL) error("ERROR on gethostbyaddr\n");
     hostaddrp = inet_ntoa(clientaddr.sin_addr);
     if (hostaddrp == NULL) error("ERROR on inet_ntoa\n");
     printf("server established connection with %s (%s)\n", hostp->h_name, hostaddrp);
@@ -123,13 +136,18 @@ int main(int argc, char **argv) {
     /* 
      * read: read input string from the client
      */
-    bzero(buf, BUFSIZE);
-    size = read(childfd, buf, BUFSIZE);
-    if (size < 0) error("ERROR reading from socket");
-    //printf("server received %d bytes: %s\n", size, buf);
+    while (1) {
+      bzero(buf, BUFSIZE);
+      size = read(childfd, buf, BUFSIZE);
+      if (size < 0)  { 
+        error("ERROR reading from socket");
+        close(childfd);
+        break;
+      }
+      //printf("server received %d bytes: %s\n", size, buf);
 
-    // check if the packet meets our standard
-    if (size) {
+      // check if the packet meets our standard
+      if (size) {
         int packetLength = 0;
         int packetType = 0;
         int index = 0;
@@ -137,50 +155,92 @@ int main(int argc, char **argv) {
         int tempValue = 0;
         int digit = 0;
         while (buf[index]!='\n' && buf[index]!='\0') {
-            digit = -1;
-            if (buf[index]>='0' && buf[index]<='9') digit = buf[index] - '0';
-            if (buf[index]>='A' && buf[index]<='F') digit = buf[index] - 'A' + 10;
-            digit &= 0x0f;
-            if (digit<0) {
-                printf("Error: unkown digit %c\n",buf[index]);
-                packetError = -1;
+          digit = -1;
+          if (buf[index]>='0' && buf[index]<='9') digit = buf[index] - '0';
+          if (buf[index]>='A' && buf[index]<='F') digit = buf[index] - 'A' + 10;
+          digit &= 0x0f;
+          if (digit<0) {
+            printf("Error: unkown digit %c\n",buf[index]);
+            packetError = -1;
+            break;
+          }
+          if(index<4) {
+            // read packet Length
+            packetLength <<= 4;
+            packetLength |= digit;
+          } else if (index<6) {
+            // read packet Type
+            packetType <<= 4;
+            packetType |= digit;
+          } else {
+            // read payload
+            switch (packetType) {
+              case CMD_SET_SAMPLE_RATE:
+              case CMD_SET_TRIGGER_LVL:
+              case CMD_START_SAMPLING:
+              case CMD_SET_TRIGGER_TYPE:
+                if (index<10) {
+                  tempValue <<= 4;
+                  tempValue |= digit;
+                }
+                break;
+              case CMD_READ_SAMPLE_RATE:
+              case CMD_READ_SAMPLES:
+              
+              case CMD_STOP_SAMPLING:
+              
+              case CMD_READ_TRIGGER_LVL:
+              
+              case CMD_READ_TRIGGER_TYPE:
+              default:
+                printf("Error: unkown command %i\n",packetType);
+                packetError = -1;                        
                 break;
             }
-            if(index<4) {
-                // read packet Length
-                packetLength <<= 4;
-                packetLength |= digit;
-            } else if (index<6) {
-                // read packet Type
-                packetType <<= 4;
-                packetType |= digit;
-            } else {
-                // read payload
-                switch (packetType) {
-                    case CMD_SET_SAMPLE_RATE:
-                        if (index<10) {
-                            tempValue <<= 4;
-                            tempValue |= digit;
-                        }
-                        break;
-                    case CMD_READ_SAMPLE_RATE:
-                    case CMD_READ_SAMPLES:
-                    case CMD_START_SAMPLING:
-                    case CMD_STOP_SAMPLING:
-                    case CMD_SET_TRIGGER_LVL:
-                    case CMD_READ_TRIGGER_LVL:
-                    case CMD_SET_TRIGGER_TYPE:
-                    case CMD_READ_TRIGGER_TYPE:
-                    default:
-                        printf("Error: unkown command %i\n",packetType);
-                        packetError = -1;                        
-                        break;
-                }
-            }
-            index++;
-            if (packetError<0) break;
+          }
+          index++;
+          if (packetError<0) break;
         }
+        if (packetError>=0) {
+          // packet successfully decoded
+          switch (packetType) {
+            case CMD_SET_SAMPLE_RATE:
+              sampleRate = tempValue;
+              printf("Set sample rate to %i\n",sampleRate);
+              break;
+            case CMD_READ_SAMPLE_RATE:
+            case CMD_READ_SAMPLES:
+            case CMD_START_SAMPLING:
+              printf("Sampling started\n");
+              isSampling = 1;
+              break;
+            case CMD_STOP_SAMPLING:
+              printf("Sampling stopped\n");
+              isSampling = 0;
+              break;            
+            case CMD_SET_TRIGGER_LVL:
+              triggerLevel = tempValue;
+              printf("Set trigger level to %i\n",triggerLevel);
+              break;            
+            case CMD_READ_TRIGGER_LVL:
+            case CMD_SET_TRIGGER_TYPE:
+              triggerMode = tempValue;
+              printf("Set trigger mode to %i\n",triggerMode);
+              break;            
+            case CMD_READ_TRIGGER_TYPE:
+            default:
+              printf("Error: unkown command %i\n",packetType);
+              packetError = -1;                        
+              break;
+          }        
+        }
+      } else {
+        printf("Client disconnected\n");
+        close(childfd);
+        break;
+      }
     }
+    
 
    
     /* 
@@ -188,6 +248,6 @@ int main(int argc, char **argv) {
      */
     //size = write(childfd, buf, strlen(buf));
     //if (size < 0) error("ERROR writing to socket");
-    close(childfd);
+    //close(childfd);
   }
 }
