@@ -21,8 +21,9 @@ type
     GroupBox1: TGroupBox;
     GroupBox2: TGroupBox;
     Label1: TLabel;
-    LTCPComponent1: TLTCPComponent;
+    tcp: TLTCPComponent;
     SpinEdit1: TSpinEdit;
+    Timer1: TTimer;
     udp: TLUDPComponent;
     Memo1: TMemo;
     SaveDialog1: TSaveDialog;
@@ -84,7 +85,7 @@ end;
 
 procedure TForm1.udpReceive(aSocket: TLSocket);
 var
-   rcv : array[1..30] of byte;
+   rcv : array[1..64] of byte;
    size : integer;
    index : integer;
    tmp: string;
@@ -92,7 +93,7 @@ begin
      //Memo1.Append();
      //udp.
    tmp := '';
-   size := aSocket.Get(rcv,20);
+   size := aSocket.Get(rcv,64);
    tmp:= 'Size='+intToStr(size);
    index := 1;
    while (size>0) do

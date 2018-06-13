@@ -49,7 +49,7 @@ object Form1: TForm1
   object Button2: TButton
     Left = 696
     Height = 25
-    Top = 352
+    Top = 304
     Width = 111
     Caption = 'Save CSV graph'
     OnClick = Button2Click
@@ -57,8 +57,8 @@ object Form1: TForm1
   end
   object Memo1: TMemo
     Left = 640
-    Height = 88
-    Top = 384
+    Height = 128
+    Top = 344
     Width = 169
     Lines.Strings = (
       'Memo1'

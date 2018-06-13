@@ -19,6 +19,7 @@ type
     Chart1LineSeries1: TLineSeries;
     ComboBox1: TComboBox;
     GroupBox1: TGroupBox;
+    GroupBox2: TGroupBox;
     Label1: TLabel;
     LTCPComponent1: TLTCPComponent;
     SpinEdit1: TSpinEdit;
@@ -75,15 +76,15 @@ end;
 
 procedure TForm1.FormResize(Sender: TObject);
 begin
-     if Form1.Width<900 then Form1.Width:=900;
-     if Form1.Height<499 then Form1.Height:=499;
-     Chart1.Width:=Form1.Width;
-     Chart1.Height:=Form1.Height-90;
+     if Form1.Width<815 then Form1.Width:=815;
+     if Form1.Height<500 then Form1.Height:=500;
+     //Chart1.Width:=Form1.Width;
+     //Chart1.Height:=Form1.Height-90;
 end;
 
 procedure TForm1.udpReceive(aSocket: TLSocket);
 var
-   rcv : array[1..30] of byte;
+   rcv : array[1..64] of byte;
    size : integer;
    index : integer;
    tmp: string;
@@ -91,7 +92,7 @@ begin
      //Memo1.Append();
      //udp.
    tmp := '';
-   size := aSocket.Get(rcv,20);
+   size := aSocket.Get(rcv,64);
    tmp:= 'Size='+intToStr(size);
    index := 1;
    while (size>0) do
