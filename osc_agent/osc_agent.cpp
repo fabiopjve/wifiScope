@@ -44,6 +44,43 @@ int set_baudrate()
 	tcsetattr(fd, TCSANOW, &options);
 }
 
+void dump_buff(char *buff, int size)
+{
+	for (int i=0;i<0x20;i++) {
+		printf("%c ", buff[i]);
+		if (i >= size)
+			break;
+	}
+}
+
+/*
+need to define constant
+- packet size (identifier)
+*/
+int FSM()
+{
+	int nbytes;
+
+#if 1
+	// read packet size in ascii format
+	nbytes = read(fd, buffer, 4);
+
+	// read packet type in ascii format
+	nbytes = read(fd, buffer, 2);
+
+	// read payload
+	nbytes = read(fd, buffer, 4);
+	dump_buff(buffer, nbytes);
+
+	// read \r
+	nbytes = read(fd, buffer, 1);
+#else
+	//nbytes = read(fd, buffer, 2);
+	nbytes = read(fd, buffer, 12);
+	dump_buff(buffer, nbytes);
+#endif
+}
+
 int main()
 {
 	int nbytes;
@@ -54,10 +91,19 @@ int main()
 	set_baudrate();
 
 	while(1) {
-		nbytes = read(fd, buffer, 255);
-		printf("got %d bytes: %x%x%x%x(%c%c%c%c)\r\n", nbytes,
-				buffer[0], buffer[1], buffer[2], buffer[3],
-				buffer[0], buffer[1], buffer[2], buffer[3]);
+		nbytes = read(fd, buffer, 4);
+		printf("got %d bytes\r\n", nbytes);
+		if (!strncmp(buffer, "WOSC", 4)) {
+			FSM();
+			printf("proper packet: %x%x%x%x(%c%c%c%c)\r\n", nbytes,
+					buffer[0], buffer[1], buffer[2], buffer[3],
+					buffer[0], buffer[1], buffer[2], buffer[3]);
+		}
+		else {
+			printf("unknown packet!! %x%x%x%x(%c%c%c%c)\r\n", nbytes,
+					buffer[0], buffer[1], buffer[2], buffer[3],
+					buffer[0], buffer[1], buffer[2], buffer[3]);
+		}
 	}
 
 	close(fd);
