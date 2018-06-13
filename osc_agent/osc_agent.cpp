@@ -4,21 +4,23 @@
 #include <fcntl.h>   /* File control definitions */
 #include <errno.h>   /* Error number definitions */
 #include <termios.h> /* POSIX terminal control definitions */
+#include "common.h"
+#include "packet.h"
 
 int fd; /* File descriptor for the port */
 char buffer[255];
 
 /*
- * 'open_port()' - Open serial port 1.
+ * open_port - Open serial port
  *
  * Returns the file descriptor on success or -1 on error.
  */
-int open_port(void)
+int open_port(const char *dev)
 {
-	fd = open("/dev/ttyACM0", O_RDWR | O_NOCTTY | O_NDELAY);
+	fd = open(dev, O_RDWR | O_NOCTTY | O_NDELAY);
 	if (fd == -1) {
 		/* Could not open the port. */
-		perror("open_port: Unable to open /dev/ttyACM0 - ");
+		perror("open_port: Unable to open %s ");
 	}
 	else
 		fcntl(fd, F_SETFL, 0);
@@ -46,11 +48,13 @@ int set_baudrate()
 
 void dump_buff(char *buff, int size)
 {
+	printf("<< ");
 	for (int i=0;i<0x20;i++) {
-		printf("%c ", buff[i]);
-		if (i >= size)
+		if (i > size)
 			break;
+		printf("%c", buff[i]);
 	}
+	printf(" >>\n");
 }
 
 /*
@@ -60,13 +64,20 @@ need to define constant
 int FSM()
 {
 	int nbytes;
+	int size, type;
 
 #if 1
 	// read packet size in ascii format
 	nbytes = read(fd, buffer, 4);
+	dump_buff(buffer, nbytes);
+	sscanf(buffer, "%04x", &size);
+	printf("size (%d) ==> %04x\n", nbytes, size);
 
 	// read packet type in ascii format
 	nbytes = read(fd, buffer, 2);
+	dump_buff(buffer, nbytes);
+	sscanf(buffer, "%02x", &type);
+	printf("type (%d) ==> %02x\n", nbytes, type);
 
 	// read payload
 	nbytes = read(fd, buffer, 4);
@@ -81,28 +92,31 @@ int FSM()
 #endif
 }
 
-int main()
+int main(int argc, char *argv[])
 {
 	int nbytes;
+    const char *dev;
 
-	if (open_port() < 0)
+	if (argc >= 2)
+		dev = argv[1];
+	else
+		dev = TTY_DEV;
+
+	if (open_port(dev) < 0)
 		return 0;
 
 	set_baudrate();
 
 	while(1) {
-		nbytes = read(fd, buffer, 4);
+		nbytes = read(fd, buffer, SYNC_STR_SIZE);
 		printf("got %d bytes\r\n", nbytes);
-		if (!strncmp(buffer, "WOSC", 4)) {
+		if (!strncmp(buffer, SYNC_STR, SYNC_STR_SIZE)) {
+			printf("proper packet!!\n");
 			FSM();
-			printf("proper packet: %x%x%x%x(%c%c%c%c)\r\n", nbytes,
-					buffer[0], buffer[1], buffer[2], buffer[3],
-					buffer[0], buffer[1], buffer[2], buffer[3]);
 		}
 		else {
-			printf("unknown packet!! %x%x%x%x(%c%c%c%c)\r\n", nbytes,
-					buffer[0], buffer[1], buffer[2], buffer[3],
-					buffer[0], buffer[1], buffer[2], buffer[3]);
+			printf("unknown packet!!\n");
+			dump_buff(buffer, nbytes);
 		}
 	}
 

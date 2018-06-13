@@ -13,3 +13,8 @@ osc_agent: osc_agent.o queue.o
 
 clean:
 	rm -f *.o osc_agent .*~
+
+install:
+	rm -f /media/charlie/disk/osc_agent
+	cp -f osc_agent /media/charlie/disk
+	sync
