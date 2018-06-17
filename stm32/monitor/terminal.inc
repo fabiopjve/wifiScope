@@ -7,7 +7,8 @@
 #ifndef TERMINAL
 #define TERMINAL(name,periph,irq,desc)
 #endif
-TERMINAL(CONSOLE, USART2, USART2,"Console")
+TERMINAL(CONSOLE, USART3, USART3,"Console")
+TERMINAL(DATA, USART2, USART2,"Data")
 
 #undef TERMINAL
   
