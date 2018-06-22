@@ -8,8 +8,26 @@ GDB=$(PREFIX)gdb
 OBJCOPY=$(PREFIX)objcopy
 OBJDUMP=$(PREFIX)objdump
 
-osc_agent: osc_agent.o queue.o
-	$(CC) -o osc_agent osc_agent.o
+CFLAGS  = -Wall -Werror
+CFLAGS += -Os
+#CFLAGS += -Wextra
+#CFLAGS += -std=gnu99
+
+EXEC = osc_agent
+
+$(EXEC): osc_agent.o utils.o
+	$(CC) $(CFLAGS) -o $(EXEC) osc_agent.o utils.o
+
+osc_agent.o: osc_agent.cpp
+	$(CC) $(CFLAGS) -c osc_agent.cpp
+
+utils.o: utils.cpp
+	$(CC) $(CFLAGS) -c utils.cpp
 
 clean:
 	rm -f *.o osc_agent .*~
+
+install:
+	rm -f /media/charlie/disk/osc_agent
+	cp -f osc_agent /media/charlie/disk
+	sync

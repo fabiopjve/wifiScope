@@ -1,0 +1,7 @@
+build/
+deps/
+make_version
+simple_monitor.*
+version.c
+*~
+.depsdir
