@@ -10,6 +10,8 @@ TODO
 need to handle the case of usb disconnection
 */
 
+#define DEBUG
+
 #include <ctype.h>
 #include <errno.h>   /* Error number definitions */
 #include <fcntl.h>   /* File control definitions */
@@ -26,9 +28,13 @@ need to handle the case of usb disconnection
 #include "common.h"
 #include "packet.h"
 
+#ifdef DEBUG
 #define BUFF_SIZE 128
+#else
+#define BUFF_SIZE 1024
+#endif
 
-#define MAX_QUEUE 128
+#define MAX_QUEUE BUFF_SIZE
 #define QUEUE_INCR (x) (((x)+1) % MAX_QUEUE)
 #define QUEUE_INCRBY (x,y) (((x)+(y)) % MAX_QUEUE)
 
@@ -95,7 +101,7 @@ void enqueue(queue *q, char *buff, int len)
 	}
 #endif
 
-	printf("====== txq after enqueue (%d:%d)=====\n", q->head, q->tail);
+	pr_debug("====== txq after enqueue (%d:%d)=====\n", q->head, q->tail);
 	hex_dump(q->buff, MAX_QUEUE);
 }
 
@@ -121,11 +127,35 @@ int dequeue(queue *q, char *buff, int len)
 	}
 #endif
 
-	printf("====== txq after dequeue (%d:%d)=====\n", q->head, q->tail);
+	pr_debug("====== txq after dequeue (%d:%d)=====\n", q->head, q->tail);
 	hex_dump(q->buff, MAX_QUEUE);
 
 	return i;
 }
+
+// make packet structure...
+// The maximum number of bytes can be written at a time
+// depending on how device driver is implemented.
+void generate_test_packet(int nbytes)
+{
+	// sync string (4) + payload size (4) + packet type (2) + payload (n) + '\r'
+	sprintf(outBuff, SYNC_STR"%04x%02x", nbytes, 0xcc);
+	// payload
+	strncat(outBuff, buffer, nbytes);
+	strcat(outBuff, "\n");
+
+	pr_debug("====== packet data to send ======\n");
+	hex_dump(outBuff, 32);
+
+	enqueue(&txq, outBuff, nbytes + 11);
+
+	// if txq is empty
+	if(!isQueueEmpty(&txq))
+		FD_SET(fd, &wset);
+
+	printf("%d bytes has been requested to write\r\n", nbytes + 11);
+}
+
 
 // later on, this function should handle multiple connection, using fd loop
 void handleSocketRead()
@@ -133,7 +163,7 @@ void handleSocketRead()
 	int rc, len;
 
 	if (FD_ISSET(listen_sd, &rset)) {
-		printf("Listening socket is readable\n");
+		printf("listening socket is readable\n");
 		if (new_sd) {
 			FD_CLR(listen_sd, &rset);
 			printf("Currently, only one user connection is allowed!\n");
@@ -142,14 +172,19 @@ void handleSocketRead()
 		new_sd = accept(listen_sd, NULL, NULL);
 		if (new_sd < 0) {
 			if (errno != EWOULDBLOCK) {
-				perror("  accept() failed");
+				pr_err("accept() failed");
 				//end_server = TRUE;
 			}
 		}
-		printf("New incoming connection - %d\n", new_sd);
+
 		FD_SET(new_sd, &rset);
 		if (new_sd > max_sd)
 			max_sd = new_sd;
+
+		printf("new incoming connection (max_sd = %d, new_sd = %d, listen_sd = %d, tty fd = %d)\n",
+				max_sd, new_sd, listen_sd, fd);
+
+		return;
 	}
 
 	if (FD_ISSET(max_sd, &rset)) {
@@ -162,7 +197,7 @@ void handleSocketRead()
 		rc = recv(max_sd, buffer, sizeof(buffer), 0);
 		if (rc < 0) {
 			if (errno != EWOULDBLOCK) {
-				perror("  recv() failed");
+				pr_err("recv() failed");
 				close_conn = TRUE;
 			}
 		}
@@ -172,23 +207,20 @@ void handleSocketRead()
 		/* closed by the client                       */
 		/**********************************************/
 		if (rc == 0) {
-			printf("  Connection closed\n");
+			printf("connection closed\n");
 			close_conn = TRUE;
-		}
+		} else {
+#if 0
+			len = rc;
+#else
+			len = rc - 1;
+#endif
+			buffer[len-1] = '\n';
+			buffer[len] = '\0';
+			printf("socket data was (len = %d) => %s\n", len, buffer);
+			generate_test_packet(len);
 
-		/**********************************************/
-		/* Data was received                          */
-		/**********************************************/
-		len = rc;
-		printf("  %d bytes received\n", len);
-
-		/**********************************************/
-		/* Echo the data back to the client           */
-		/**********************************************/
-		rc = send(max_sd, buffer, len, 0);
-		if (rc < 0) {
-			perror("  send() failed");
-			close_conn = TRUE;
+			return;
 		}
 	}
 
@@ -202,36 +234,15 @@ void handleSocketRead()
 
 void handleRead()
 {
-	int nbytes;
+	int nbytes, dlen;
 
 	if (FD_ISSET(0, &rset)) {
 		nbytes = read(0, buffer, BUFF_SIZE);
+
 		buffer[nbytes] = '\0';
+		pr_debug("stdin was (len = %d) => %s\n", nbytes, buffer);
 
-		printf("stdin was => %s\n", buffer);
-
-		// The maximum number of bytes can be written at a time depend on
-		// how device driver is implemented.
-
-		// make packet structure...
-		{
-			// sync string (4) + payload size (4) + packet type (2) + payload (n) + '\r'
-			sprintf(outBuff, SYNC_STR"%04x%02x", nbytes, 0xcc);
-			// payload
-			strncat(outBuff, buffer, nbytes);
-			strcat(outBuff, "\r");
-
-			puts("====== packet data to send ======");
-			hex_dump(outBuff, 32);
-		}
-
-		enqueue(&txq, outBuff, nbytes + 11);
-
-		// if txq is empty
-		if(!isQueueEmpty(&txq))
-			FD_SET(fd, &wset);
-
-		printf("%d bytes has been requested to write\r\n", nbytes + 11);
+		generate_test_packet(nbytes);
 	}
 
 	if (FD_ISSET(fd, &rset)) {
@@ -239,8 +250,26 @@ void handleRead()
 		/* make NULL terminated string */
 		buffer[nbytes] = '\0';
 		//printf("STM32 sent %d bytes >> %s\r\n", nbytes, buffer);
-		printf("====== STM32 sent %d bytes =====\n", nbytes);
+		pr_debug("====== STM32 sent %d bytes =====\n", nbytes);
 		hex_dump(buffer, 32);
+
+		// if frontend is connected via socket
+		if (max_sd != listen_sd) {
+			// just try to send recieved data to front end via socket
+			// without using select system call
+			dlen = nbytes;
+			while (dlen) {
+				nbytes = send(max_sd, buffer, dlen, 0);
+				pr_info("send returned %d\n", nbytes);
+				if (nbytes < 0) {
+					pr_info("error = %d dlen=%d\n", nbytes, dlen);
+					// I know it's ugly. :(
+					usleep(1000000);
+				}
+				else
+					dlen -= nbytes;
+			}
+		}
 	}
 }
 
@@ -255,9 +284,10 @@ void handleWrite()
 		while (dlen) {
 			nbytes = write(fd, buffer, dlen);
 			pr_info("write returned %d\n", nbytes);
-			if (nbytes == EAGAIN) {
-				pr_info("EAGAIN!! dlen=%d nbytes=%d\n", dlen, nbytes);
-				usleep(100);
+			if (nbytes < 0) {
+				pr_info("error = %d dlen=%d\n", nbytes, dlen);
+				// I know it's ugly. :(
+				usleep(1000000);
 			}
 			else
 				dlen -= nbytes;
@@ -282,7 +312,7 @@ void init_socket()
    /*************************************************************/
    listen_sd = socket(AF_INET, SOCK_STREAM, 0);
    if (listen_sd < 0) {
-      perror("socket() failed");
+      pr_err("socket() failed");
       exit(-1);
    }
 
@@ -292,7 +322,7 @@ void init_socket()
    rc = setsockopt(listen_sd, SOL_SOCKET,  SO_REUSEADDR,
                    (char *)&on, sizeof(on));
    if (rc < 0) {
-      perror("setsockopt() failed");
+      pr_err("setsockopt() failed");
       close(listen_sd);
       exit(-1);
    }
@@ -304,7 +334,7 @@ void init_socket()
    /*************************************************************/
    rc = ioctl(listen_sd, FIONBIO, (char *)&on);
    if (rc < 0) {
-      perror("ioctl() failed");
+      pr_err("ioctl() failed");
       close(listen_sd);
       exit(-1);
    }
@@ -318,7 +348,7 @@ void init_socket()
    addr.sin_port        = htons(SERVER_PORT);
    rc = bind(listen_sd, (struct sockaddr *)&addr, sizeof(addr));
    if (rc < 0) {
-      perror("bind() failed");
+      pr_err("bind() failed");
       close(listen_sd);
       exit(-1);
    }
@@ -328,7 +358,7 @@ void init_socket()
    /*************************************************************/
    rc = listen(listen_sd, 32);
    if (rc < 0) {
-      perror("listen() failed");
+      pr_err("listen() failed");
       close(listen_sd);
       exit(-1);
    }
@@ -369,15 +399,18 @@ int main(int argc, char *argv[])
 		FD_SET(fd, &rset);
 		// listening socket
 		FD_SET(listen_sd, &rset);
+		if (new_sd) {
+			FD_SET(new_sd, &rset);
+		}
 
-		pr_debug("select: round again");
+		pr_debug("select: round again\n");
 		//ret = select(fd+1, &rset, &wset, NULL, &tv);
 		ret = select(max_sd+1, &rset, &wset, NULL, NULL);
 		pr_debug("select: returned %d\n", ret);
 
 		switch (ret) {
 			case -1:
-				perror("select()");
+				pr_err("select()");
 				continue;
 			case 0:
 				puts("timeout!!~~");
@@ -387,10 +420,10 @@ int main(int argc, char *argv[])
 				continue;
 		}
 
+		handleSocketRead();
+
 		handleRead();
 		handleWrite();
-
-		handleSocketRead();
 	}
 
 	close(fd);

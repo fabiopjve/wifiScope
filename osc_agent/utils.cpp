@@ -8,17 +8,7 @@
 #include <termios.h> /* POSIX terminal control definitions */
 #include "common.h"
 
-void dump_buff(char *buff, int size)
-{
-	printf("<< ");
-	for (int i=0;i<0x20;i++) {
-		if (i > size)
-			break;
-		printf("%c", buff[i]);
-	}
-	printf(" >>\n");
-}
-
+#if 0
 void hex_dump(char *buff, int size)
 {
 	char str[16+1];
@@ -34,6 +24,7 @@ void hex_dump(char *buff, int size)
 	}
 	puts("\n");
 }
+#endif
 
 /*
  * open_port - Open serial port
