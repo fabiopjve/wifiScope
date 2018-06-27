@@ -6,6 +6,9 @@
 #ifndef __COMMON_H
 #define __COMMON_H
 
+#define TRUE	1
+#define FALSE	0
+
 #define TTY_DEV	"/dev/ttyACM0"
 
 // below pr_debug macro is used only for verbose debugging

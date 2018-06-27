@@ -10,14 +10,19 @@ TODO
 need to handle the case of usb disconnection
 */
 
+#include <ctype.h>
+#include <errno.h>   /* Error number definitions */
+#include <fcntl.h>   /* File control definitions */
 #include <stdio.h>   /* Standard input/output definitions */
+#include <stdlib.h>
 #include <string.h>  /* String function definitions */
 #include <unistd.h>  /* UNIX standard function definitions */
-#include <fcntl.h>   /* File control definitions */
-#include <errno.h>   /* Error number definitions */
 #include <termios.h> /* POSIX terminal control definitions */
-#include <ctype.h>
+#include <netinet/in.h>
+#include <sys/ioctl.h>
 #include <sys/select.h>
+#include <sys/socket.h>
+#include <sys/time.h>
 #include "common.h"
 #include "packet.h"
 
@@ -27,7 +32,12 @@ need to handle the case of usb disconnection
 #define QUEUE_INCR (x) (((x)+1) % MAX_QUEUE)
 #define QUEUE_INCRBY (x,y) (((x)+(y)) % MAX_QUEUE)
 
-static int fd; /* File descriptor for the port */
+#define SERVER_PORT  5555
+
+static int fd; /* File descriptor for ttyACM channel */
+int listen_sd, max_sd, new_sd;
+int close_conn;
+
 fd_set rset, wset;
 timeval tv = { 2, 0 };
 
@@ -117,6 +127,79 @@ int dequeue(queue *q, char *buff, int len)
 	return i;
 }
 
+// later on, this function should handle multiple connection, using fd loop
+void handleSocketRead()
+{
+	int rc, len;
+
+	if (FD_ISSET(listen_sd, &rset)) {
+		printf("Listening socket is readable\n");
+		if (new_sd) {
+			FD_CLR(listen_sd, &rset);
+			printf("Currently, only one user connection is allowed!\n");
+			close_conn = TRUE;
+		}
+		new_sd = accept(listen_sd, NULL, NULL);
+		if (new_sd < 0) {
+			if (errno != EWOULDBLOCK) {
+				perror("  accept() failed");
+				//end_server = TRUE;
+			}
+		}
+		printf("New incoming connection - %d\n", new_sd);
+		FD_SET(new_sd, &rset);
+		if (new_sd > max_sd)
+			max_sd = new_sd;
+	}
+
+	if (FD_ISSET(max_sd, &rset)) {
+		/**********************************************/
+		/* Receive data on this connection until the  */
+		/* recv fails with EWOULDBLOCK.  If any other */
+		/* failure occurs, we will close the          */
+		/* connection.                                */
+		/**********************************************/
+		rc = recv(max_sd, buffer, sizeof(buffer), 0);
+		if (rc < 0) {
+			if (errno != EWOULDBLOCK) {
+				perror("  recv() failed");
+				close_conn = TRUE;
+			}
+		}
+
+		/**********************************************/
+		/* Check to see if the connection has been    */
+		/* closed by the client                       */
+		/**********************************************/
+		if (rc == 0) {
+			printf("  Connection closed\n");
+			close_conn = TRUE;
+		}
+
+		/**********************************************/
+		/* Data was received                          */
+		/**********************************************/
+		len = rc;
+		printf("  %d bytes received\n", len);
+
+		/**********************************************/
+		/* Echo the data back to the client           */
+		/**********************************************/
+		rc = send(max_sd, buffer, len, 0);
+		if (rc < 0) {
+			perror("  send() failed");
+			close_conn = TRUE;
+		}
+	}
+
+	if (close_conn) {
+		close(max_sd);
+		FD_CLR(max_sd, &rset);
+		max_sd = listen_sd;
+		new_sd = 0;
+	}
+}
+
 void handleRead()
 {
 	int nbytes;
@@ -184,6 +267,75 @@ void handleWrite()
 	}
 }
 
+void init_socket()
+{
+   int rc, on = 1;
+   //int desc_ready, end_server = FALSE;
+   //char buffer[80];
+   sockaddr_in addr;
+   //timeval timeout;
+   //fd_set master_set, working_set;
+
+   /*************************************************************/
+   /* Create an AF_INET stream socket to receive incoming       */
+   /* connections on                                            */
+   /*************************************************************/
+   listen_sd = socket(AF_INET, SOCK_STREAM, 0);
+   if (listen_sd < 0) {
+      perror("socket() failed");
+      exit(-1);
+   }
+
+   /*************************************************************/
+   /* Allow socket descriptor to be reuseable                   */
+   /*************************************************************/
+   rc = setsockopt(listen_sd, SOL_SOCKET,  SO_REUSEADDR,
+                   (char *)&on, sizeof(on));
+   if (rc < 0) {
+      perror("setsockopt() failed");
+      close(listen_sd);
+      exit(-1);
+   }
+
+   /*************************************************************/
+   /* Set socket to be nonblocking. All of the sockets for    */
+   /* the incoming connections will also be nonblocking since  */
+   /* they will inherit that state from the listening socket.   */
+   /*************************************************************/
+   rc = ioctl(listen_sd, FIONBIO, (char *)&on);
+   if (rc < 0) {
+      perror("ioctl() failed");
+      close(listen_sd);
+      exit(-1);
+   }
+
+   /*************************************************************/
+   /* Bind the socket                                           */
+   /*************************************************************/
+   memset(&addr, 0, sizeof(addr));
+   addr.sin_family      = AF_INET;
+   addr.sin_addr.s_addr = htonl(INADDR_ANY);
+   addr.sin_port        = htons(SERVER_PORT);
+   rc = bind(listen_sd, (struct sockaddr *)&addr, sizeof(addr));
+   if (rc < 0) {
+      perror("bind() failed");
+      close(listen_sd);
+      exit(-1);
+   }
+
+   /*************************************************************/
+   /* Set the listen back log                                   */
+   /*************************************************************/
+   rc = listen(listen_sd, 32);
+   if (rc < 0) {
+      perror("listen() failed");
+      close(listen_sd);
+      exit(-1);
+   }
+
+   max_sd = listen_sd;
+}
+
 int main(int argc, char *argv[])
 {
 	int ret;
@@ -206,6 +358,8 @@ int main(int argc, char *argv[])
 	/* Flush anything already in the serial buffer */
 	tcflush(fd, TCIFLUSH);
 
+	init_socket();
+
 	// once stabilzed, let's change from select to epoll system call
 	// for I/O multiplexing, which is much more efficient.
 	while(1) {
@@ -213,10 +367,12 @@ int main(int argc, char *argv[])
 		FD_ZERO(&wset);
 		FD_SET(0, &rset);	// or stdin
 		FD_SET(fd, &rset);
+		// listening socket
+		FD_SET(listen_sd, &rset);
 
 		pr_debug("select: round again");
 		//ret = select(fd+1, &rset, &wset, NULL, &tv);
-		ret = select(fd+1, &rset, &wset, NULL, NULL);
+		ret = select(max_sd+1, &rset, &wset, NULL, NULL);
 		pr_debug("select: returned %d\n", ret);
 
 		switch (ret) {
@@ -233,6 +389,8 @@ int main(int argc, char *argv[])
 
 		handleRead();
 		handleWrite();
+
+		handleSocketRead();
 	}
 
 	close(fd);
