@@ -13,7 +13,7 @@
 
 #define SYNC_STR        "WOSC"
 #define SYNC_STR_SIZE   (sizeof(SYNC_STR) - 1)
-#define EOP_STR			"\r"
+#define EOP_STR			"\n"
 
 #define BUFFER_LEN 1024
 
@@ -108,7 +108,7 @@ ProcessCharacter:
 	input[count++] = c;
 
 	// reached at the end of incoming packet
-	if (c == '\r') {
+	if (c == '\n') {
 		ptr = input;
 		if (!strncmp(input, SYNC_STR, SYNC_STR_SIZE)) {
 			//send_debug("proper packet");
