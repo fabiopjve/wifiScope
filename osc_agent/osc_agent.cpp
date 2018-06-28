@@ -10,7 +10,7 @@ TODO
 need to handle the case of usb disconnection
 */
 
-#define DEBUG
+//#define DEBUG
 
 #include <ctype.h>
 #include <errno.h>   /* Error number definitions */
@@ -29,7 +29,9 @@ need to handle the case of usb disconnection
 #include "packet.h"
 #include "queue.h"
 
-#define SERVER_PORT  5555
+#define SERVER_PORT		5555
+#define USLEEP_EAGAIN	1000
+//#define FAKE_PACKET
 
 static int fd; /* File descriptor for ttyACM channel */
 
@@ -37,18 +39,23 @@ static int listen_sd, max_sd, new_sd;
 static int close_conn;
 
 static char buffer[BUFF_SIZE];
+#ifdef FAKE_PACKET
 static char outBuff[BUFF_SIZE];
+#endif
 
 fd_set rset, wset;
 timeval tv = { 2, 0 };
 
 queue rxq, txq;
 
-// make packet structure...
-// The maximum number of bytes can be written at a time
-// depending on how device driver is implemented.
-void generate_test_packet(int nbytes)
+void forward_packet(int nbytes)
 {
+#ifdef FAKE_PACKET
+	// fabricate packet
+	buffer[nbytes] = '\0';
+	printf("payload data was (len = %d) => %s\n", nbytes, buffer);
+
+	// make packet structure...
 	// sync string (4) + payload size (4) + packet type (2) + payload (n) + '\n'
 	sprintf(outBuff, SYNC_STR"%04x%02x", nbytes, 0xcc);
 	// payload
@@ -60,17 +67,24 @@ void generate_test_packet(int nbytes)
 
 	enqueue(&txq, outBuff, nbytes + 11);
 
+	printf("requested to write %d bytes\r\n", nbytes + 11);
+#else
+	pr_debug("====== packet data to send (len=%d) ======\n", nbytes);
+	hex_dump(buffer, 32);
+	enqueue(&txq, buffer, nbytes);
+
+	printf("requested to write %d bytes\r\n", nbytes);
+#endif
+
 	// if txq is empty
 	if(!isQueueEmpty(&txq))
 		FD_SET(fd, &wset);
-
-	printf("%d bytes has been requested to write\r\n", nbytes + 11);
 }
 
 // later on, this function should handle multiple connection, using fd loop
 void handleSocketRead()
 {
-	int rc, len;
+	int rc;
 
 	if (FD_ISSET(listen_sd, &rset)) {
 		printf("listening socket is readable\n");
@@ -120,11 +134,7 @@ void handleSocketRead()
 			printf("connection closed\n");
 			close_conn = TRUE;
 		} else {
-			len = rc;
-			buffer[len] = '\0';
-			printf("socket data was (len = %d) => %s\n", len, buffer);
-			generate_test_packet(len);
-
+			forward_packet(rc);
 			return;
 		}
 	}
@@ -143,11 +153,7 @@ void handleRead()
 
 	if (FD_ISSET(0, &rset)) {
 		nbytes = read(0, buffer, BUFF_SIZE);
-
-		buffer[nbytes] = '\0';
-		pr_debug("stdin was (len = %d) => %s\n", nbytes, buffer);
-
-		generate_test_packet(nbytes);
+		forward_packet(nbytes);
 	}
 
 	if (FD_ISSET(fd, &rset)) {
@@ -169,7 +175,7 @@ void handleRead()
 				if (nbytes < 0) {
 					pr_info("error = %d dlen=%d\n", nbytes, dlen);
 					// I know it's ugly. :(
-					usleep(1000000);
+					usleep(USLEEP_EAGAIN);
 				}
 				else
 					dlen -= nbytes;
@@ -190,9 +196,9 @@ void handleWrite()
 			nbytes = write(fd, buffer, dlen);
 			pr_info("write returned %d\n", nbytes);
 			if (nbytes < 0) {
-				pr_info("error = %d dlen=%d\n", nbytes, dlen);
+				pr_debug("error = %d dlen=%d\n", nbytes, dlen);
 				// I know it's ugly. :(
-				usleep(1000000);
+				usleep(USLEEP_EAGAIN);
 			}
 			else
 				dlen -= nbytes;
@@ -304,10 +310,10 @@ int main(int argc, char *argv[])
 			FD_SET(new_sd, &rset);
 		}
 
-		pr_debug("select: round again\n");
+		//pr_debug("select: round again\n");
 		//ret = select(fd+1, &rset, &wset, NULL, &tv);
 		ret = select(max_sd+1, &rset, &wset, NULL, NULL);
-		pr_debug("select: returned %d\n", ret);
+		//pr_debug("select: returned %d\n", ret);
 
 		switch (ret) {
 			case -1:

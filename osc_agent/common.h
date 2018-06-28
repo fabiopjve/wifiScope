@@ -10,7 +10,7 @@
 #define FALSE	0
 
 #ifdef DEBUG
-#define BUFF_SIZE 128
+#define BUFF_SIZE 512
 #else
 #define BUFF_SIZE 1024
 #endif
