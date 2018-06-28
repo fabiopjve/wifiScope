@@ -27,118 +27,29 @@ need to handle the case of usb disconnection
 #include <sys/time.h>
 #include "common.h"
 #include "packet.h"
-
-#ifdef DEBUG
-#define BUFF_SIZE 128
-#else
-#define BUFF_SIZE 1024
-#endif
-
-#define MAX_QUEUE BUFF_SIZE
-#define QUEUE_INCR (x) (((x)+1) % MAX_QUEUE)
-#define QUEUE_INCRBY (x,y) (((x)+(y)) % MAX_QUEUE)
+#include "queue.h"
 
 #define SERVER_PORT  5555
 
 static int fd; /* File descriptor for ttyACM channel */
-int listen_sd, max_sd, new_sd;
-int close_conn;
+
+static int listen_sd, max_sd, new_sd;
+static int close_conn;
+
+static char buffer[BUFF_SIZE];
+static char outBuff[BUFF_SIZE];
 
 fd_set rset, wset;
 timeval tv = { 2, 0 };
 
-typedef struct _queue {
-	int fd;
-	int head, tail;
-	char buff[MAX_QUEUE];
-} queue;
-
 queue rxq, txq;
-
-char buffer[BUFF_SIZE];
-char outBuff[BUFF_SIZE];
-
-void init_queue(queue *q, int fd)
-{
-	q->head = q->tail = 0;
-	q->fd = fd;
-}
-
-int isQueueEmpty(queue *q)
-{
-	return q->head == q->tail;
-}
-
-int isQueueFull(queue *q)
-{
-	return q->head == (q->tail + 1) % MAX_QUEUE;
-}
-
-// make sure len is bigger than available room in the queue
-// before calling this function!!
-void enqueue(queue *q, char *buff, int len)
-{
-#if 1
-	// simplified version
-	while (len) {
-		q->buff[q->tail] = *buff++;
-		q->tail++;
-		q->tail %= MAX_QUEUE;
-		len--;
-	}
-#else
-	int freeroom;
-
-	// memcpy version (would be faster thanks to the memory DMA)
-	if (q->head <= q->tail) {
-		freeroom = BUFF_SIZE - q->tail - 1;
-		if (freeroom >= len) {
-			memcpy(q->buff + q->tail, buff, len);
-			q->tail += freeroom;
-		} else {
-			memcpy(q->buff, buff, len - freeroom);
-		}
-	}
-#endif
-
-	pr_debug("====== txq after enqueue (%d:%d)=====\n", q->head, q->tail);
-	hex_dump(q->buff, MAX_QUEUE);
-}
-
-// If available data is less than len, just return the smaller size.
-int dequeue(queue *q, char *buff, int len)
-{
-	int i;
-#if 1
-	for (i=0; i < len ;i++) {
-		if (isQueueEmpty(q))
-			break;
-		buff[i] = q->buff[q->head];
-		q->head++;
-		q->head %= MAX_QUEUE;
-	}
-#else
-	//int nbytes, cp_len;
-
-	if (q->tail > q->head) {
-		nbytes = write(q->fd, q->buffer, nbytes);
-	} else {
-
-	}
-#endif
-
-	pr_debug("====== txq after dequeue (%d:%d)=====\n", q->head, q->tail);
-	hex_dump(q->buff, MAX_QUEUE);
-
-	return i;
-}
 
 // make packet structure...
 // The maximum number of bytes can be written at a time
 // depending on how device driver is implemented.
 void generate_test_packet(int nbytes)
 {
-	// sync string (4) + payload size (4) + packet type (2) + payload (n) + '\r'
+	// sync string (4) + payload size (4) + packet type (2) + payload (n) + '\n'
 	sprintf(outBuff, SYNC_STR"%04x%02x", nbytes, 0xcc);
 	// payload
 	strncat(outBuff, buffer, nbytes);
@@ -155,7 +66,6 @@ void generate_test_packet(int nbytes)
 
 	printf("%d bytes has been requested to write\r\n", nbytes + 11);
 }
-
 
 // later on, this function should handle multiple connection, using fd loop
 void handleSocketRead()
@@ -210,12 +120,7 @@ void handleSocketRead()
 			printf("connection closed\n");
 			close_conn = TRUE;
 		} else {
-#if 0
 			len = rc;
-#else
-			len = rc - 1;
-#endif
-			buffer[len-1] = '\n';
 			buffer[len] = '\0';
 			printf("socket data was (len = %d) => %s\n", len, buffer);
 			generate_test_packet(len);
@@ -300,11 +205,7 @@ void handleWrite()
 void init_socket()
 {
    int rc, on = 1;
-   //int desc_ready, end_server = FALSE;
-   //char buffer[80];
    sockaddr_in addr;
-   //timeval timeout;
-   //fd_set master_set, working_set;
 
    /*************************************************************/
    /* Create an AF_INET stream socket to receive incoming       */
