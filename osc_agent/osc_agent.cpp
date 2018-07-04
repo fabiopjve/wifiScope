@@ -96,7 +96,7 @@ void handleSocketRead()
 		new_sd = accept(listen_sd, NULL, NULL);
 		if (new_sd < 0) {
 			if (errno != EWOULDBLOCK) {
-				pr_err("accept() failed");
+				pr_err("accept() failed\n");
 				//end_server = TRUE;
 			}
 		}
@@ -121,7 +121,7 @@ void handleSocketRead()
 		rc = recv(max_sd, buffer, sizeof(buffer), 0);
 		if (rc < 0) {
 			if (errno != EWOULDBLOCK) {
-				pr_err("recv() failed");
+				pr_err("recv() failed\n");
 				close_conn = TRUE;
 			}
 		}
@@ -131,7 +131,7 @@ void handleSocketRead()
 		/* closed by the client                       */
 		/**********************************************/
 		if (rc == 0) {
-			printf("connection closed\n");
+			printf("connection has been closed by peer.\n");
 			close_conn = TRUE;
 		} else {
 			forward_packet(rc);
@@ -144,6 +144,7 @@ void handleSocketRead()
 		FD_CLR(max_sd, &rset);
 		max_sd = listen_sd;
 		new_sd = 0;
+		printf("connection closed\n");
 	}
 }
 
@@ -219,7 +220,7 @@ void init_socket()
    /*************************************************************/
    listen_sd = socket(AF_INET, SOCK_STREAM, 0);
    if (listen_sd < 0) {
-      pr_err("socket() failed");
+      pr_err("socket() failed\n");
       exit(-1);
    }
 
@@ -229,7 +230,7 @@ void init_socket()
    rc = setsockopt(listen_sd, SOL_SOCKET,  SO_REUSEADDR,
                    (char *)&on, sizeof(on));
    if (rc < 0) {
-      pr_err("setsockopt() failed");
+      pr_err("setsockopt() failed\n");
       close(listen_sd);
       exit(-1);
    }
@@ -241,7 +242,7 @@ void init_socket()
    /*************************************************************/
    rc = ioctl(listen_sd, FIONBIO, (char *)&on);
    if (rc < 0) {
-      pr_err("ioctl() failed");
+      pr_err("ioctl() failed\n");
       close(listen_sd);
       exit(-1);
    }
@@ -255,7 +256,7 @@ void init_socket()
    addr.sin_port        = htons(SERVER_PORT);
    rc = bind(listen_sd, (struct sockaddr *)&addr, sizeof(addr));
    if (rc < 0) {
-      pr_err("bind() failed");
+      pr_err("bind() failed\n");
       close(listen_sd);
       exit(-1);
    }
@@ -265,7 +266,7 @@ void init_socket()
    /*************************************************************/
    rc = listen(listen_sd, 32);
    if (rc < 0) {
-      pr_err("listen() failed");
+      pr_err("listen() failed\n");
       close(listen_sd);
       exit(-1);
    }
@@ -317,7 +318,7 @@ int main(int argc, char *argv[])
 
 		switch (ret) {
 			case -1:
-				pr_err("select()");
+				pr_err("select() with error = %d\n", errno);
 				continue;
 			case 0:
 				puts("timeout!!~~");
