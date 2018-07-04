@@ -142,8 +142,10 @@ void handleSocketRead()
 	if (close_conn) {
 		close(max_sd);
 		FD_CLR(max_sd, &rset);
+		FD_CLR(max_sd, &wset);
 		max_sd = listen_sd;
 		new_sd = 0;
+		close_conn = FALSE;
 		printf("connection closed\n");
 	}
 }
