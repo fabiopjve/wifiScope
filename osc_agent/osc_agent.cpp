@@ -36,7 +36,7 @@ need to handle the case of usb disconnection
 static int fd; /* File descriptor for ttyACM channel */
 
 static int listen_sd, max_sd, new_sd;
-static int close_conn;
+static int close_conn, osc_alive = TRUE;
 
 static char buffer[BUFF_SIZE];
 #ifdef FAKE_PACKET
@@ -161,6 +161,11 @@ void handleRead()
 
 	if (FD_ISSET(fd, &rset)) {
 		nbytes = read(fd, buffer, BUFF_SIZE/2);
+		if (nbytes == 0) {
+			osc_alive = FALSE;
+			pr_err("USB H/W has been disconnected...\n");
+			return;
+		}
 		/* make NULL terminated string */
 		buffer[nbytes] = '\0';
 		//printf("STM32 sent %d bytes >> %s\r\n", nbytes, buffer);
@@ -302,7 +307,7 @@ int main(int argc, char *argv[])
 
 	// once stabilzed, let's change from select to epoll system call
 	// for I/O multiplexing, which is much more efficient.
-	while(1) {
+	while(osc_alive) {
 		FD_ZERO(&rset);
 		FD_ZERO(&wset);
 		FD_SET(0, &rset);	// or stdin
@@ -336,6 +341,9 @@ int main(int argc, char *argv[])
 		handleWrite();
 	}
 
+	close(listen_sd);
+	close(max_sd);
+	close(new_sd);
 	close(fd);
 
 	return 0;

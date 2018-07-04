@@ -38,7 +38,7 @@ int open_port(const char *dev)
 	fd = open(dev, O_RDWR | O_NOCTTY | O_NDELAY);
 	if (fd == -1) {
 		/* Could not open the port. */
-		perror("open_port: Unable to open %s ");
+		printf("open_port: Unable to open %s\n", dev);
 	}
 	else
 		fcntl(fd, F_SETFL, 0);
