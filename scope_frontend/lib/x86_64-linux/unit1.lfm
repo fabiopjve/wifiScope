@@ -1,7 +1,7 @@
 object Form1: TForm1
-  Left = 391
+  Left = 433
   Height = 500
-  Top = 124
+  Top = 140
   Width = 815
   Caption = 'Wireless Scope'
   ClientHeight = 500
@@ -31,6 +31,9 @@ object Form1: TForm1
         Marks.AtDataOnly = True
         Marks.LabelBrush.Style = bsClear
         Minors = <>
+        Range.Max = 64
+        Range.UseMax = True
+        Range.UseMin = True
         Title.LabelBrush.Style = bsClear
       end>
     BackColor = clBlack
@@ -47,32 +50,21 @@ object Form1: TForm1
     end
   end
   object Button2: TButton
-    Left = 696
+    Left = 640
     Height = 25
-    Top = 304
-    Width = 111
+    Top = 448
+    Width = 169
     Caption = 'Save CSV graph'
     OnClick = Button2Click
     TabOrder = 1
   end
-  object Memo1: TMemo
-    Left = 640
-    Height = 128
-    Top = 344
-    Width = 169
-    Lines.Strings = (
-      'Memo1'
-    )
-    ScrollBars = ssAutoBoth
-    TabOrder = 2
-  end
-  object Label1: TLabel
+  object StatusLabel: TLabel
     Left = 640
     Height = 17
     Top = 480
     Width = 169
     AutoSize = False
-    Caption = 'Label1'
+    Caption = 'Not connected ...'
     ParentColor = False
   end
   object Button1: TButton
@@ -81,7 +73,8 @@ object Form1: TForm1
     Top = 8
     Width = 169
     Caption = 'Connect'
-    TabOrder = 3
+    OnClick = Button1Click
+    TabOrder = 2
   end
   object GroupBox1: TGroupBox
     Left = 640
@@ -93,13 +86,27 @@ object Form1: TForm1
     ClientWidth = 167
     Color = clGreen
     ParentColor = False
-    TabOrder = 4
+    TabOrder = 3
     object SpinEdit1: TSpinEdit
-      Left = 32
+      Left = 8
       Height = 27
-      Top = 16
-      Width = 128
+      Top = 48
+      Width = 152
       TabOrder = 0
+    end
+    object ComboBox2: TComboBox
+      Left = 8
+      Height = 29
+      Top = 8
+      Width = 152
+      ItemHeight = 0
+      ItemIndex = 0
+      Items.Strings = (
+        'Rising Edge'
+        'Falling Edge'
+      )
+      TabOrder = 1
+      Text = 'Rising Edge'
     end
   end
   object GroupBox2: TGroupBox
@@ -112,7 +119,7 @@ object Form1: TForm1
     ClientWidth = 167
     Color = clTeal
     ParentColor = False
-    TabOrder = 5
+    TabOrder = 4
     object ComboBox1: TComboBox
       Left = 8
       Height = 29
@@ -142,10 +149,18 @@ object Form1: TForm1
     Timeout = 0
     left = 48
   end
-  object LTCPComponent1: TLTCPComponent
-    Port = 0
+  object tcp: TLTCPComponent
+    Port = 5555
+    OnReceive = tcpReceive
+    OnDisconnect = tcpDisconnect
+    OnConnect = tcpConnect
     Timeout = 0
     ReuseAddress = False
-    left = 168
+    left = 272
+  end
+  object Timer1: TTimer
+    Interval = 125
+    OnTimer = Timer1Timer
+    left = 216
   end
 end

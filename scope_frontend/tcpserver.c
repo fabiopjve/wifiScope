@@ -11,13 +11,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <netdb.h>
+#include <math.h>
 #include <sys/types.h> 
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/ioctl.h>
 
-#define BUFSIZE 1024
+#define BUFSIZE 2048
 
 #define CMD_SET_SAMPLE_RATE     0x11
 #define CMD_READ_SAMPLE_RATE    0x12
@@ -28,6 +29,23 @@
 #define CMD_READ_TRIGGER_LVL    0x66
 #define CMD_SET_TRIGGER_TYPE    0x67
 #define CMD_READ_TRIGGER_TYPE   0x68
+#define CMD_ACK                 0xFF
+
+int parentfd; /* parent socket */
+int childfd; /* child socket */
+int portno; /* port to listen on */
+int clientlen; /* byte size of client's address */
+struct sockaddr_in serveraddr; /* server's addr */
+struct sockaddr_in clientaddr; /* client addr */
+struct hostent *hostp; /* client host info */
+char buf[BUFSIZE]; /* message buffer */
+char *hostaddrp; /* dotted decimal host addr string */
+int optval; /* flag value for setsockopt */
+int size; /* message byte size */
+int sampleRate = 17;
+int triggerLevel = 0;
+int triggerMode = 0;
+int isSampling = 0;
 
 /*
  * error - wrapper for perror
@@ -37,24 +55,194 @@ void error(char *msg) {
   exit(1);
 }
 
-int sampleRate = 0;
-int triggerLevel = 0;
-int triggerMode = 0;
-int isSampling = 0;
+/*
+  void dataToHexString(unsigned int value, char *buffer)
 
-int main(int argc, char **argv) {
-  int parentfd; /* parent socket */
-  int childfd; /* child socket */
-  int portno; /* port to listen on */
-  int clientlen; /* byte size of client's address */
-  struct sockaddr_in serveraddr; /* server's addr */
-  struct sockaddr_in clientaddr; /* client addr */
-  struct hostent *hostp; /* client host info */
-  char buf[BUFSIZE]; /* message buffer */
-  char *hostaddrp; /* dotted decimal host addr string */
-  int optval; /* flag value for setsockopt */
-  int size; /* message byte size */
+  Converts an 8 or 16-bit value into a hexadecimal string
 
+  input:  unsigned int value - the word we want to convert to string
+          char size - 2 for bytes and 4 for words
+          char *buffer - the string we are going to write the result
+*/
+void dataToHexString(unsigned int value, char size, char *buffer)
+{
+  unsigned int compareValue = 4096;
+  char index = 0;
+  if (size!=2 && size !=4) return;
+  if (size==2) compareValue = 16;
+  while (index<size) {
+    if (value>=compareValue) {
+      char result = value / compareValue;
+      if (result<=9) *buffer = '0'+result; else *buffer = 'A'+result-10;
+      value -= (int)result*compareValue;
+    } else *buffer = '0';
+    index++;
+    buffer++;
+    compareValue /= 16;
+  }
+}
+
+/*
+  char hasHeader(char * buf)
+
+  Checks if the string starts with WOSC
+
+  input:    char *buffer - the string we are going to write the result
+  returns:  char - 0 if header not found, 1 if found
+*/
+char hasHeader(char * buf)
+{
+  if (*buf!='W') return 0;
+  buf++;
+  if (*buf!='O') return 0;
+  buf++;
+  if (*buf!='S') return 0;
+  buf++;
+  if (*buf!='C') return 0;
+  return 1;
+}
+
+/*
+  long int getDataFromString(char *buf, char size)
+
+  Converts a hexadecimal string into an 8 or 16-bit integer
+
+  input:    char *buffer - the string with the data we want to convert
+            char size - 2 for bytes and 4 for words
+  returns:  long int - converted value or -1 if error  
+*/
+long int getDataFromString(char *buf, char size)
+{
+  unsigned char digit;
+  char index = 0;
+  char ch;
+  long int result = 0;
+  if (size!=2 && size !=4) return -1;
+  while (index<size) {
+    digit = -1;
+    if (*buf>='0' && *buf<='9') digit = *buf - '0';
+    if (*buf>='A' && *buf<='F') digit = *buf - 'A' + 10; 
+    digit &= 0x0f;
+    if (digit<0) return -1;
+    result <<= 4;
+    result |= digit;
+    buf++;
+    index++;
+  }
+  return result;  
+}
+
+/*
+  void sendData(char command)
+
+  Sends a command and its implicit payload over the TCP connection
+
+  input:    char command - one of the known commands
+            char size - 2 for bytes and 4 for words  
+*/
+void sendData(char command)
+{
+  char *buffer;
+  unsigned int value = 0;
+  unsigned int compareValue = 4096;
+  char index = 0;
+  buffer = alloca(64);
+  if (buffer==NULL) {
+    printf("sendData error: could not allocate memory\n");
+    return;
+  }
+  switch (command) {
+    case CMD_READ_SAMPLE_RATE :   value = sampleRate;     break;
+    case CMD_READ_TRIGGER_LVL :   value = triggerLevel;   break;
+    case CMD_READ_TRIGGER_TYPE :  value = triggerMode;    break;
+  }
+  send(childfd, "WOSC0004FF", 10, MSG_DONTWAIT);
+  dataToHexString(value,4,buffer);
+  printf("Value=%i, String=%s\n",value,buffer);
+  send(childfd, buffer, 4, MSG_DONTWAIT);
+}
+
+/*
+  void sendData(char command)
+
+  Sends all samples on TCP connection
+*/
+void sendBuffer(void)
+{
+  static int counter, offset;
+  char *buffer;
+  unsigned int value = 0;
+  int bufferSize = 64;
+  buffer = alloca(16);
+  if (buffer==NULL) {
+    printf("sendData error: could not allocate memory\n");
+    return;
+  }
+  if (counter>10) {
+    offset++;
+    if (offset>30) offset=0;
+    counter = 0;
+  } else counter++;
+  send(childfd, "WOSC", 4, MSG_DONTWAIT);
+  dataToHexString(bufferSize*4,4,buffer);
+  send(childfd, buffer, 4, MSG_DONTWAIT); 
+  send(childfd, "FF", 2, MSG_DONTWAIT);
+  for (int x=0; x<bufferSize; x++) {
+    float sinRes = sin((3.141592*2/bufferSize)*(x+offset));
+    float val = (sinRes+1)*2047;
+    printf("Val=%f %i\n",sinRes,(int)val);
+    dataToHexString((int)val,4,buffer);
+    send(childfd, buffer, 4, MSG_DONTWAIT);
+  }
+}
+
+/*
+  void performCommand(int cmd, int tempValue)
+
+  Process a received command and its payload
+
+  input:    char cmd - command we are trying to process
+            int tempValue - payload received with command  
+*/
+void performCommand(char cmd, int tempValue)
+{
+  switch (cmd) {
+    case CMD_SET_SAMPLE_RATE:
+      sampleRate = tempValue;
+      printf("Set sample rate to %i\n",sampleRate);
+      break;
+    case CMD_READ_SAMPLES:
+      sendBuffer();
+      break;
+    case CMD_START_SAMPLING:
+      printf("Sampling started\n");
+      isSampling = 1;
+      break;
+    case CMD_STOP_SAMPLING:
+      printf("Sampling stopped\n");
+      isSampling = 0;
+      break;            
+    case CMD_SET_TRIGGER_LVL:
+      triggerLevel = tempValue;
+      printf("Set trigger level to %i\n",triggerLevel);
+      break;              
+    case CMD_SET_TRIGGER_TYPE:
+      triggerMode = tempValue;
+      printf("Set trigger mode to %i\n",triggerMode);
+      break;    
+    case CMD_READ_SAMPLE_RATE:        
+    case CMD_READ_TRIGGER_LVL:
+    case CMD_READ_TRIGGER_TYPE:
+      sendData(cmd);
+      break;   
+    default:
+      printf("Error: unkown command %i\n",cmd);                        
+      break;
+  } 
+}
+
+int main(int argc, char **argv) 
+{
   /* 
    * check command line arguments 
    */
@@ -144,110 +332,72 @@ int main(int argc, char **argv) {
         close(childfd);
         break;
       }
-      //printf("server received %d bytes: %s\n", size, buf);
-
-      // check if the packet meets our standard
+      // check if the packet includes the fields we expect
       if (size) {
         int packetLength = 0;
         int packetType = 0;
-        int index = 0;
         int packetError = 0;
         int tempValue = 0;
-        int digit = 0;
-        while (buf[index]!='\n' && buf[index]!='\0') {
-          digit = -1;
-          if (buf[index]>='0' && buf[index]<='9') digit = buf[index] - '0';
-          if (buf[index]>='A' && buf[index]<='F') digit = buf[index] - 'A' + 10;
-          digit &= 0x0f;
-          if (digit<0) {
-            printf("Error: unkown digit %c\n",buf[index]);
-            packetError = -1;
-            break;
-          }
-          if(index<4) {
-            // read packet Length
-            packetLength <<= 4;
-            packetLength |= digit;
-          } else if (index<6) {
-            // read packet Type
-            packetType <<= 4;
-            packetType |= digit;
-          } else {
-            // read payload
-            switch (packetType) {
-              case CMD_SET_SAMPLE_RATE:
-              case CMD_SET_TRIGGER_LVL:
-              case CMD_START_SAMPLING:
-              case CMD_SET_TRIGGER_TYPE:
-                if (index<10) {
-                  tempValue <<= 4;
-                  tempValue |= digit;
-                }
-                break;
-              case CMD_READ_SAMPLE_RATE:
-              case CMD_READ_SAMPLES:
-              
-              case CMD_STOP_SAMPLING:
-              
-              case CMD_READ_TRIGGER_LVL:
-              
-              case CMD_READ_TRIGGER_TYPE:
-              default:
-                printf("Error: unkown command %i\n",packetType);
-                packetError = -1;                        
-                break;
-            }
-          }
-          index++;
-          if (packetError<0) break;
-        }
+        if (hasHeader(buf)) printf("Header found\n"); else packetError = -1;
+        if (getDataFromString(buf+4,4)>=0) packetLength = getDataFromString(buf+4,4); else packetError = -1;
+        //printf("Packet Length=%i\n",packetLength);
+        if (getDataFromString(buf+8,2)>=0) packetType = getDataFromString(buf+8,2); else packetError = -1; 
+        //printf("Packet type=%i\n",packetType);
+        if (getDataFromString(buf+10,4)>=0) tempValue = getDataFromString(buf+10,4);
         if (packetError>=0) {
           // packet successfully decoded
-          switch (packetType) {
-            case CMD_SET_SAMPLE_RATE:
-              sampleRate = tempValue;
-              printf("Set sample rate to %i\n",sampleRate);
-              break;
-            case CMD_READ_SAMPLE_RATE:
-            case CMD_READ_SAMPLES:
-            case CMD_START_SAMPLING:
-              printf("Sampling started\n");
-              isSampling = 1;
-              break;
-            case CMD_STOP_SAMPLING:
-              printf("Sampling stopped\n");
-              isSampling = 0;
-              break;            
-            case CMD_SET_TRIGGER_LVL:
-              triggerLevel = tempValue;
-              printf("Set trigger level to %i\n",triggerLevel);
-              break;            
-            case CMD_READ_TRIGGER_LVL:
-            case CMD_SET_TRIGGER_TYPE:
-              triggerMode = tempValue;
-              printf("Set trigger mode to %i\n",triggerMode);
-              break;            
-            case CMD_READ_TRIGGER_TYPE:
-            default:
-              printf("Error: unkown command %i\n",packetType);
-              packetError = -1;                        
-              break;
-          }        
-        }
+          performCommand(packetType,tempValue);
+        } else printf("Packet error\n");
       } else {
         printf("Client disconnected\n");
         close(childfd);
         break;
       }
     }
-    
+  }
+}
 
-   
-    /* 
-     * write: echo the input string back to the client 
-     */
-    //size = write(childfd, buf, strlen(buf));
-    //if (size < 0) error("ERROR writing to socket");
-    //close(childfd);
+//#define FSM_STATE(state) name: jumper = &&name;
+#define FSM_YIELD(state) ({jumper = &&state; return;})
+#define FSM_START() static void *jumper = NULL; if (jumper!=NULL) goto *jumper;
+
+void testFSM(void) 
+{
+  FSM_START();
+  static int counter = 0;
+  
+  state1:
+    printf("state 1\n");
+    FSM_YIELD(state2);
+  state2:
+    printf("state 2\n");
+    counter++;
+    if (counter==2) FSM_YIELD(state3); else FSM_YIELD(state1);
+  state3:
+    printf("state 3\n");
+    FSM_YIELD(state4);
+  state4:
+    counter = 0;
+}
+
+void testFSM2(void) 
+{
+  static int counter = 0, state=0;
+  switch(state) {
+    case 0:
+      printf("State 1\n");
+      state = 1;
+      break;
+    case 1:
+      printf("State 2\n");
+      counter++;
+      if (counter==2) state = 2; else state =0;
+      break;
+    case 2:
+      printf("State 3\n");
+      state = 3;
+      break;
+    case 3:
+      break;
   }
 }
