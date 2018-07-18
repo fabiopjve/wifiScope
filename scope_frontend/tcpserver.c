@@ -173,12 +173,12 @@ void sendBuffer(void)
   char *buffer;
   unsigned int value = 0;
   int bufferSize = 64;
-  buffer = alloca(16);
+  buffer = alloca(bufferSize);
   if (buffer==NULL) {
     printf("sendData error: could not allocate memory\n");
     return;
   }
-  if (counter>10) {
+  if (1) {
     offset++;
     if (offset>30) offset=0;
     counter = 0;
