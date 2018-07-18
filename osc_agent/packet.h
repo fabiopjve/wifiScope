@@ -9,7 +9,7 @@
 #define SYNC_STR		"WOSC"
 #define SYNC_STR_SIZE	(sizeof(SYNC_STR) - 1)
 
-#define WRITE_SIZE	32
-#define READ_SIZE	32
+#define WRITE_SIZE	512
+#define READ_SIZE	512
 
 #endif /* __PACKET_H */
