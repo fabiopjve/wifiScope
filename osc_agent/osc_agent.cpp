@@ -32,6 +32,7 @@ need to handle the case of usb disconnection
 #define SERVER_PORT		5555
 #define USLEEP_EAGAIN	1000
 //#define FAKE_PACKET
+#define DUMP_BYTES		32
 
 static int fd; /* File descriptor for ttyACM channel */
 
@@ -63,14 +64,14 @@ void forward_packet(int nbytes)
 	strcat(outBuff, "\n");
 
 	pr_debug("====== packet data to send ======\n");
-	hex_dump(outBuff, 32);
+	hex_dump(outBuff, DUMP_BYTES);
 
 	enqueue(&txq, outBuff, nbytes + 11);
 
 	printf("requested to write %d bytes\r\n", nbytes + 11);
 #else
 	pr_debug("====== packet data to send (len=%d) ======\n", nbytes);
-	hex_dump(buffer, 32);
+	hex_dump(buffer, DUMP_BYTES);
 	enqueue(&txq, buffer, nbytes);
 
 	printf("requested to write %d bytes\r\n", nbytes);
@@ -156,7 +157,8 @@ void handleRead()
 
 	if (FD_ISSET(0, &rset)) {
 		nbytes = read(0, buffer, BUFF_SIZE);
-		forward_packet(nbytes);
+		/* -1 means just ignoring stdin's '\n' character */
+		forward_packet(nbytes-1);
 	}
 
 	if (FD_ISSET(fd, &rset)) {
@@ -170,7 +172,7 @@ void handleRead()
 		buffer[nbytes] = '\0';
 		//printf("STM32 sent %d bytes >> %s\r\n", nbytes, buffer);
 		pr_debug("====== STM32 sent %d bytes =====\n", nbytes);
-		hex_dump(buffer, 32);
+		hex_dump(buffer, DUMP_BYTES);
 
 		// if frontend is connected via socket
 		if (max_sd != listen_sd) {
