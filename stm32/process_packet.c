@@ -15,7 +15,7 @@
 #define SYNC_STR_SIZE   (sizeof(SYNC_STR) - 1)
 #define EOP_STR			"\n"
 
-#define BUFFER_LEN 1024
+#define BUFFER_LEN 2048
 
 #define	PKT_SET_SAMPLERATE		0x11
 #define	PKT_READ_SAMPLERATE		0x12
@@ -79,10 +79,19 @@ void nullfunc(char *buff, int len)
 
 void testfunc(char *buff, int len)
 {
+#if 1
 	sprintf(output, SYNC_STR"%04x%02x", len, 0xcc);
 	strncat(output, buff, len);
 	strcat(output, EOP_STR);
 	TerminalOutputBufferWrite(INDEX_DATA, output, strlen(output));
+#else
+	// just for testing long packet issue
+	for (int i=0;i<50;i++) {
+		strcat(output, "1234567890123456789012345678901234567890");
+		TerminalOutputBufferWrite(INDEX_DATA, output, strlen(output));
+	}
+	TerminalOutputBufferWrite(INDEX_DATA, EOP_STR, 1);
+#endif
 }
 
 #if 1
