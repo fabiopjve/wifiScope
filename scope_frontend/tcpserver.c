@@ -29,7 +29,7 @@
 #define CMD_READ_TRIGGER_LVL    0x66
 #define CMD_SET_TRIGGER_TYPE    0x67
 #define CMD_READ_TRIGGER_TYPE   0x68
-#define CMD_ACK                 0xFF
+#define CMD_DEBUG_MESSAGE       0xDE
 
 int parentfd; /* parent socket */
 int childfd; /* child socket */
@@ -157,9 +157,12 @@ void sendData(char command)
     case CMD_READ_TRIGGER_TYPE :  value = triggerMode;    break;
   }
   send(childfd, "WOSC0004FF", 10, MSG_DONTWAIT);
+  dataToHexString(command,2,buffer);
+  send(childfd, buffer, 4, MSG_DONTWAIT);
   dataToHexString(value,4,buffer);
   printf("Value=%i, String=%s\n",value,buffer);
   send(childfd, buffer, 4, MSG_DONTWAIT);
+  send(childfd, "\n", 1, MSG_DONTWAIT);
 }
 
 /*
@@ -186,7 +189,7 @@ void sendBuffer(void)
   send(childfd, "WOSC", 4, MSG_DONTWAIT);
   dataToHexString(bufferSize*4,4,buffer);
   send(childfd, buffer, 4, MSG_DONTWAIT); 
-  send(childfd, "FF", 2, MSG_DONTWAIT);
+  send(childfd, "22", 2, MSG_DONTWAIT);
   for (int x=0; x<bufferSize; x++) {
     float sinRes = sin((3.141592*2/bufferSize)*(x+offset));
     float val = (sinRes+1)*2047;
@@ -194,6 +197,8 @@ void sendBuffer(void)
     dataToHexString((int)val,4,buffer);
     send(childfd, buffer, 4, MSG_DONTWAIT);
   }
+  send(childfd, "\n", 1, MSG_DONTWAIT);
+  send(childfd, "WOSC0005DEDebug\n", 16, MSG_DONTWAIT);
 }
 
 /*

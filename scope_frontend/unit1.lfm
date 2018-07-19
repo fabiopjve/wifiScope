@@ -1,7 +1,7 @@
 object Form1: TForm1
-  Left = 433
+  Left = 574
   Height = 500
-  Top = 140
+  Top = 150
   Width = 815
   Caption = 'Wireless Scope'
   ClientHeight = 500
@@ -9,46 +9,6 @@ object Form1: TForm1
   OnCreate = FormCreate
   OnResize = FormResize
   LCLVersion = '1.8.2.0'
-  object Chart1: TChart
-    Left = 0
-    Height = 500
-    Top = 0
-    Width = 635
-    AxisList = <    
-      item
-        Grid.Color = clWhite
-        Marks.LabelBrush.Style = bsClear
-        Minors = <>
-        Range.Max = 4095
-        Range.UseMax = True
-        Range.UseMin = True
-        Title.LabelFont.Orientation = 900
-        Title.LabelBrush.Style = bsClear
-      end    
-      item
-        Grid.Color = clWhite
-        Alignment = calBottom
-        Marks.AtDataOnly = True
-        Marks.LabelBrush.Style = bsClear
-        Minors = <>
-        Range.Max = 64
-        Range.UseMax = True
-        Range.UseMin = True
-        Title.LabelBrush.Style = bsClear
-      end>
-    BackColor = clBlack
-    Foot.Brush.Color = clBtnFace
-    Foot.Font.Color = clBlue
-    Title.Brush.Color = clBtnFace
-    Title.Font.Color = clBlue
-    Title.Text.Strings = (
-      'TAChart'
-    )
-    object Chart1LineSeries1: TLineSeries
-      LinePen.Color = clRed
-      Source = sr1
-    end
-  end
   object Button2: TButton
     Left = 640
     Height = 25
@@ -56,7 +16,7 @@ object Form1: TForm1
     Width = 169
     Caption = 'Save CSV graph'
     OnClick = Button2Click
-    TabOrder = 1
+    TabOrder = 0
   end
   object StatusLabel: TLabel
     Left = 640
@@ -74,7 +34,7 @@ object Form1: TForm1
     Width = 169
     Caption = 'Connect'
     OnClick = Button1Click
-    TabOrder = 2
+    TabOrder = 1
   end
   object GroupBox1: TGroupBox
     Left = 640
@@ -86,7 +46,7 @@ object Form1: TForm1
     ClientWidth = 167
     Color = clGreen
     ParentColor = False
-    TabOrder = 3
+    TabOrder = 2
     object SpinEdit1: TSpinEdit
       Left = 8
       Height = 27
@@ -119,7 +79,7 @@ object Form1: TForm1
     ClientWidth = 167
     Color = clTeal
     ParentColor = False
-    TabOrder = 4
+    TabOrder = 3
     object ComboBox1: TComboBox
       Left = 8
       Height = 29
@@ -127,15 +87,70 @@ object Form1: TForm1
       Width = 156
       AutoSize = False
       ItemHeight = 0
+      ItemIndex = 0
       Items.Strings = (
         '0.1 sec'
         '10 msec'
         '1 msec'
         '100 usec'
       )
+      OnChange = ComboBox1Change
       TabOrder = 0
-      Text = 'ComboBox1'
+      Text = '0.1 sec'
     end
+  end
+  object Chart1: TChart
+    Left = 0
+    Height = 500
+    Top = 0
+    Width = 635
+    AxisList = <    
+      item
+        Grid.Color = clWhite
+        Marks.LabelBrush.Style = bsClear
+        Minors = <>
+        Range.Max = 4095
+        Range.UseMax = True
+        Range.UseMin = True
+        Title.LabelFont.Orientation = 900
+        Title.LabelBrush.Style = bsClear
+      end    
+      item
+        Grid.Color = clWhite
+        Alignment = calBottom
+        Marks.AtDataOnly = True
+        Marks.LabelBrush.Style = bsClear
+        Minors = <>
+        Range.Max = 6.4
+        Range.UseMax = True
+        Range.UseMin = True
+        Title.Margins.Top = 0
+        Title.Margins.Bottom = 0
+        Title.Attachment = maCenter
+        Title.Visible = True
+        Title.Caption = 'seconds'
+        Title.LabelBrush.Style = bsClear
+      end>
+    BackColor = clBlack
+    Foot.Brush.Color = clBtnFace
+    Foot.Font.Color = clBlue
+    Title.Brush.Color = clBtnFace
+    Title.Font.Color = clBlue
+    Title.Text.Strings = (
+      'TAChart'
+    )
+    object Chart1LineSeries1: TLineSeries
+      LinePen.Color = clRed
+      Source = sr1
+    end
+  end
+  object Memo1: TMemo
+    Left = 640
+    Height = 162
+    Top = 280
+    Width = 169
+    ScrollBars = ssAutoBoth
+    TabOrder = 5
   end
   object sr1: TListChartSource
     left = 88
@@ -152,6 +167,7 @@ object Form1: TForm1
   object tcp: TLTCPComponent
     Port = 5555
     OnReceive = tcpReceive
+    OnError = tcpError
     OnDisconnect = tcpDisconnect
     OnConnect = tcpConnect
     Timeout = 0
