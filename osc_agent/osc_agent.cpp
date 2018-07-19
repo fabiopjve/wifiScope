@@ -53,6 +53,10 @@ void forward_packet(int nbytes)
 {
 #ifdef FAKE_PACKET
 	// fabricate packet
+
+	/* -1 means just ignoring stdin's '\n' character */
+	nbytes -= 1;
+
 	buffer[nbytes] = '\0';
 	printf("payload data was (len = %d) => %s\n", nbytes, buffer);
 
@@ -157,8 +161,7 @@ void handleRead()
 
 	if (FD_ISSET(0, &rset)) {
 		nbytes = read(0, buffer, BUFF_SIZE);
-		/* -1 means just ignoring stdin's '\n' character */
-		forward_packet(nbytes-1);
+		forward_packet(nbytes);
 	}
 
 	if (FD_ISSET(fd, &rset)) {
