@@ -9,7 +9,11 @@
 
 #include <stdarg.h>
 #include <string.h>
+#include <alloca.h>
+#include <math.h>
 #include "common.h"
+
+#define FAKE_WAVEFORM
 
 #define SYNC_STR        "WOSC"
 #define SYNC_STR_SIZE   (sizeof(SYNC_STR) - 1)
@@ -27,30 +31,49 @@
 #define	PKT_SET_TRIGGER_TYPE	0x67
 #define	PKT_READ_TRIGGER_TYPE	0x68
 #define	PKT_TEST				0xcc
+#define	PKT_DEBUG_LOG			0xde
+
+#define send(x, y) TerminalOutputBufferWrite(INDEX_DATA, x, y)
 
 void nullfunc(char *buff, int len);
 void testfunc(char *buff, int len);
+void send_sample_buff(char *buff, int len);
 
 char debug[BUFFER_LEN];
 char input[BUFFER_LEN];
 char output[BUFFER_LEN];
 
-#ifdef DEBUG
-static void send_debug(char *format, ...)
+#if 1
+static void send_log(char *fmt, ...)
 {
-    va_list args;
+	int size = 0;
+    va_list ap;
 
-    va_start(args, format);
+	/* Determine required size */
+	va_start(ap, fmt);
+	size = vsnprintf(debug, size, fmt, ap);
+	va_end(ap);
 
-	vsprintf(debug, format, args);
+	if (size < 0)
+		return;
 
-	TerminalOutputBufferWrite(INDEX_DATA, debug, strlen(debug));
-	TerminalOutputBufferWrite(INDEX_DATA, EOP_STR, 1);
+	size++;
 
-    va_end(args);
+	sprintf(debug, SYNC_STR"%04x%02x", size, PKT_DEBUG_LOG);
+	send(debug, strlen(debug));
+
+	va_start(ap, fmt);
+	size = vsnprintf(debug, size, fmt, ap);
+	if (size < 0)
+		return;
+	va_end(ap);
+
+	// send payload
+	send(debug, size);
+	send(EOP_STR, 1);
 }
 #else
-static void send_debug(char *format, ...) {}
+static void send_log(char *format, ...) {}
 #endif
 
 struct {
@@ -59,7 +82,7 @@ struct {
 } pkt_handler[] = {
 	{ PKT_SET_SAMPLERATE,		nullfunc},
 	{ PKT_READ_SAMPLERATE,		nullfunc},
-	{ PKT_READ_SAMPLEBUFFER,	nullfunc},
+	{ PKT_READ_SAMPLEBUFFER,	send_sample_buff },
 	{ PKT_START_SAMPLING,		nullfunc},
 	{ PKT_STOP_SAMPLING,		nullfunc},
 	{ PKT_SET_TRIGGER_LEVEL,	nullfunc},
@@ -74,27 +97,99 @@ struct {
 void nullfunc(char *buff, int len)
 {
 	// add your own debug routine
-	send_debug("test");
+}
+
+/*
+  void dataToHexString(unsigned int value, char *buffer)
+
+  Converts an 8 or 16-bit value into a hexadecimal string
+
+  input:  unsigned int value - the word we want to convert to string
+          char size - 2 for bytes and 4 for words
+          char *buffer - the string we are going to write the result
+*/
+void dataToHexString(unsigned int value, char size, char *buffer)
+{
+  unsigned int compareValue = 4096;
+  char index = 0;
+  if (size!=2 && size !=4) return;
+  if (size==2) compareValue = 16;
+  while (index<size) {
+    if (value>=compareValue) {
+      char result = value / compareValue;
+      if (result<=9) *buffer = '0'+result; else *buffer = 'A'+result-10;
+      value -= (int)result*compareValue;
+    } else *buffer = '0';
+    index++;
+    buffer++;
+    compareValue /= 16;
+  }
+}
+
+/* Size of array ADC_samples[] */
+#define ADC_SAMPLES_BUFFSIZE  64
+extern volatile uint16_t   ADC_samples[ADC_SAMPLES_BUFFSIZE];
+
+void send_sample_buff(char *buff, int len)
+{
+	static int counter, offset;
+	char *buffer;
+	//unsigned int value = 0;
+	int bufferSize = 64;
+
+	buffer = alloca(bufferSize);
+	if (buffer==NULL) {
+		printf("sendData error: could not allocate memory\n");
+		return;
+	}
+
+	if (1) {
+		offset++;
+		if (offset>30) offset=0;
+		counter = 0;
+	} else
+		counter++;
+
+	send(SYNC_STR, 4);
+	dataToHexString(bufferSize*4,4,buffer);
+	send(buffer, 4);
+	send("22", 2);
+
+	for (int x=0; x<bufferSize; x++) {
+#ifdef FAKE_WAVEFORM
+		float sinRes = sin((3.141592*2/bufferSize)*(x+offset));
+		float val = (sinRes+1)*2047;
+		//printf("%f (%04i/%04x)\r\n",sinRes,(int)val, (int)val);
+		dataToHexString((int)val,4,buffer);
+#else
+		dataToHexString((int)ADC_samples[x],4,buffer);
+#endif
+		send(buffer, 4);
+	}
+
+	send(EOP_STR, 1);
+
+	//send("WOSC0005deDebug\n", 16);
+	//send_log("Thanks! Bro!");
 }
 
 void testfunc(char *buff, int len)
 {
 #if 1
-	sprintf(output, SYNC_STR"%04x%02x", len, 0xcc);
+	sprintf(output, SYNC_STR"%04x%02x", len, 0xde);
 	strncat(output, buff, len);
 	strcat(output, EOP_STR);
-	TerminalOutputBufferWrite(INDEX_DATA, output, strlen(output));
+	send(output, strlen(output));
 #else
 	// just for testing long packet issue
 	for (int i=0;i<50;i++) {
 		strcat(output, "1234567890123456789012345678901234567890");
-		TerminalOutputBufferWrite(INDEX_DATA, output, strlen(output));
+		send(output, strlen(output));
 	}
-	TerminalOutputBufferWrite(INDEX_DATA, EOP_STR, 1);
+	send(INDEX_DATA, EOP_STR, 1);
 #endif
 }
 
-#if 1
 void TaskProcessPacket(void *data)
 {
 	char c;
@@ -120,13 +215,13 @@ ProcessCharacter:
 	if (c == '\n') {
 		ptr = input;
 		if (!strncmp(input, SYNC_STR, SYNC_STR_SIZE)) {
-			//send_debug("proper packet");
+			//send_log("proper packet");
 			ptr += SYNC_STR_SIZE;
 			sscanf(ptr, "%04x", &psize);
-			//send_debug("size=%04x", psize);
+			//send_log("size=%04x", psize);
 			ptr += 4;
 			sscanf(ptr, "%02x", &ptype);
-			//send_debug("type=%02x", ptype);
+			//send_log("type=%02x", ptype);
 			ptr += 2;
 			// find proper packet handler function and run
 			for (int i=0; pkt_handler[i].type ;i++)
@@ -134,23 +229,15 @@ ProcessCharacter:
 					(*(pkt_handler[i].func))(ptr, psize);
 				}
 		} else {
-			//send_debug("wrong packet");
+			//send_log("wrong packet");
 		}
 		count = 0;
 	}
 }
-#else
-void TaskProcessPacket(void *data)
+
+static void TaskProcessPacketInit(void *data)
 {
-	//TerminalOutputBufferWrite(INDEX_DATA, "0123", 4);
-	//TerminalOutputBufferWrite(INDEX_DATA, "\r", 1);
-	TerminalOutputBufferWrite(INDEX_DATA, "0123456789abcdef", 16);
-
-	//TerminalOutputBufferWrite(INDEX_DATA, debug, strlen(debug));
-	//TerminalOutputBufferWrite(INDEX_DATA, EOP_STR, 1);
-
-	HAL_Delay(1000);
+	send_log("Hello");
 }
-#endif
 
-ADD_TASK(TaskProcessPacket, NULL, NULL, "Packet Processing task")
+ADD_TASK(TaskProcessPacket, TaskProcessPacketInit, NULL, "Packet Processing task")
