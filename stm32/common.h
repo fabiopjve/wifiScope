@@ -5,6 +5,8 @@
 #ifndef __COMMON_H
 #define __COMMON_H
 
+#include <ctype.h>
+#include <string.h>
 #include <stdint.h>
 #include <time.h>
 
@@ -112,6 +114,19 @@ typedef enum {
   INDEX_MAX } PortIndex_e;
   
 
+#define hex_dump(buff, size) do {	\
+	char str[16+1];					\
+	for (int i=0;i<=size;i++) {		\
+		if (i && i%16 == 0) {		\
+			str[16] = '\0';			\
+			puts(str);				\
+		}							\
+		if (i >= size) break;		\
+		printf("%02x ", buff[i]);	\
+		str[i%16] = isprint(buff[i]) ? buff[i] : '.'; \
+	}	\
+	puts("\n"); \
+} while (0);
 
 void TerminalInit(void);
 uint32_t TerminalRead(PortIndex_e index, uint8_t *ptr, uint32_t len);

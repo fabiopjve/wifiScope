@@ -6,26 +6,36 @@
 #ifndef __COMMON_H
 #define __COMMON_H
 
+#include <time.h>
+
 #define TRUE	1
 #define FALSE	0
 
-#ifdef DEBUG
-#define BUFF_SIZE 512
-#else
 #define BUFF_SIZE 1024
-#endif
 
 #define TTY_DEV	"/dev/ttyACM0"
 
+#ifdef DEBUG_TIMESTAMP
+#define pr_info(fmt, ...) do {			\
+	char str[32];						\
+	time_t clk = time(NULL);			\
+	strncpy(str, ctime(&clk) + 11, 8);	\
+	str[8] = 0;							\
+	printf("[%s] ", str);				\
+	printf(fmt, ##__VA_ARGS__);			\
+} while (0)
+#else
+#define pr_info(fmt, ...) printf(fmt, ##__VA_ARGS__);
+#endif
+
 // below pr_debug macro is used only for verbose debugging
 #ifdef DEBUG
-#define pr_debug(fmt, ...) printf(fmt, ##__VA_ARGS__)
+#define pr_debug pr_info
 #else
 #define pr_debug(fmt, ...)
 #endif
 
-#define pr_info(fmt, ...) printf("%18s:%3d\t" fmt, __func__, __LINE__, ##__VA_ARGS__)
-#define pr_err(fmt, ...) printf("%18s:%3d\t" fmt, __func__, __LINE__, ##__VA_ARGS__)
+#define pr_err(fmt, ...) printf("%s:%3d: " fmt, __func__, __LINE__, ##__VA_ARGS__)
 
 // just for code readability
 #define lock(x)		pthread_mutex_lock(x);
@@ -38,22 +48,24 @@
    ((type *)((char *)(ptr)-(char *)(&((type *)0)->member)))
 #endif
 
-#ifdef DEBUG
-#define hex_dump(buff, size) do {	\
-	char str[16+1];					\
-	for (int i=0;i<=size;i++) {		\
-		if (i && i%16 == 0) {		\
-			str[16] = '\0';			\
-			puts(str);				\
-		}							\
-		if (i >= size) break;		\
-		printf("%02x ", buff[i]);	\
+#ifdef DEBUG_DUMP
+#define hex_dump(label, buff, size) do {	\
+	printf("\n======================== ");		\
+	printf("%s", label);					\
+	printf(" ========================\n");		\
+	char str[16+1];							\
+	for (int i=0;i<=size;i++) {				\
+		if (i && i%16 == 0) {				\
+			str[16] = '\0';					\
+			puts(str);						\
+		}									\
+		if (i >= size) break;				\
+		printf("%02x ", buff[i]);			\
 		str[i%16] = isprint(buff[i]) ? buff[i] : '.'; \
 	}	\
-	puts("\n"); \
-} while (0);
+} while (0)
 #else
-#define hex_dump(buff, size)
+#define hex_dump(label, buff, size)
 #endif
 
 int open_port(const char *dev);

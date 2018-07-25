@@ -22,4 +22,5 @@ int isQueueEmpty(queue *q);
 int isQueueFull(queue *q);
 void enqueue(queue *q, char *buff, int len);
 int dequeue(queue *q, char *buff, int len);
+int getQueueSize(queue *q);
 #endif /* __QUEUE_H */

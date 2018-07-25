@@ -5,12 +5,9 @@
  *
  */
 
-/*
-TODO
-need to handle the case of usb disconnection
-*/
-
-//#define DEBUG
+#define DEBUG
+#define DEBUG_TIMESTAMP
+//#define DEBUG_DUMP
 
 #include <ctype.h>
 #include <errno.h>   /* Error number definitions */
@@ -53,8 +50,12 @@ void forward_packet(int nbytes)
 {
 #ifdef FAKE_PACKET
 	// fabricate packet
+
+	/* -1 means just ignoring stdin's '\n' character */
+	nbytes -= 1;
+
 	buffer[nbytes] = '\0';
-	printf("payload data was (len = %d) => %s\n", nbytes, buffer);
+	pr_info("payload data was (len = %d) => %s\n", nbytes, buffer);
 
 	// make packet structure...
 	// sync string (4) + payload size (4) + packet type (2) + payload (n) + '\n'
@@ -63,18 +64,16 @@ void forward_packet(int nbytes)
 	strncat(outBuff, buffer, nbytes);
 	strcat(outBuff, "\n");
 
-	pr_debug("====== packet data to send ======\n");
-	hex_dump(outBuff, DUMP_BYTES);
+	hex_dump("from frontend", outBuff, DUMP_BYTES);
 
 	enqueue(&txq, outBuff, nbytes + 11);
 
-	printf("requested to write %d bytes\r\n", nbytes + 11);
+	pr_debug("requested to write %d bytes\r\n", nbytes + 11);
 #else
-	pr_debug("====== packet data to send (len=%d) ======\n", nbytes);
-	hex_dump(buffer, DUMP_BYTES);
+	hex_dump("from frontend", buffer, DUMP_BYTES);
 	enqueue(&txq, buffer, nbytes);
 
-	printf("requested to write %d bytes\r\n", nbytes);
+	pr_debug("frontend -> STM32 (%d bytes)\r\n", nbytes);
 #endif
 
 	// if txq is empty
@@ -88,10 +87,10 @@ void handleSocketRead()
 	int rc;
 
 	if (FD_ISSET(listen_sd, &rset)) {
-		printf("listening socket is readable\n");
+		pr_info("listening socket is readable\n");
 		if (new_sd) {
 			FD_CLR(listen_sd, &rset);
-			printf("Currently, only one user connection is allowed!\n");
+			pr_info("Currently, only one user connection is allowed!\n");
 			close_conn = TRUE;
 		}
 		new_sd = accept(listen_sd, NULL, NULL);
@@ -106,7 +105,7 @@ void handleSocketRead()
 		if (new_sd > max_sd)
 			max_sd = new_sd;
 
-		printf("new incoming connection (max_sd = %d, new_sd = %d, listen_sd = %d, tty fd = %d)\n",
+		pr_info("new incoming connection (max_sd = %d, new_sd = %d, listen_sd = %d, tty fd = %d)\n",
 				max_sd, new_sd, listen_sd, fd);
 
 		return;
@@ -132,7 +131,7 @@ void handleSocketRead()
 		/* closed by the client                       */
 		/**********************************************/
 		if (rc == 0) {
-			printf("connection has been closed by peer.\n");
+			pr_info("connection has been closed by peer.\n");
 			close_conn = TRUE;
 		} else {
 			forward_packet(rc);
@@ -147,7 +146,7 @@ void handleSocketRead()
 		max_sd = listen_sd;
 		new_sd = 0;
 		close_conn = FALSE;
-		printf("connection closed\n");
+		pr_info("connection closed\n");
 	}
 }
 
@@ -157,12 +156,11 @@ void handleRead()
 
 	if (FD_ISSET(0, &rset)) {
 		nbytes = read(0, buffer, BUFF_SIZE);
-		/* -1 means just ignoring stdin's '\n' character */
-		forward_packet(nbytes-1);
+		forward_packet(nbytes);
 	}
 
 	if (FD_ISSET(fd, &rset)) {
-		nbytes = read(fd, buffer, BUFF_SIZE/2);
+		nbytes = read(fd, buffer, BUFF_SIZE);
 		if (nbytes == 0) {
 			osc_alive = FALSE;
 			pr_err("USB H/W has been disconnected...\n");
@@ -170,9 +168,7 @@ void handleRead()
 		}
 		/* make NULL terminated string */
 		buffer[nbytes] = '\0';
-		//printf("STM32 sent %d bytes >> %s\r\n", nbytes, buffer);
-		pr_debug("====== STM32 sent %d bytes =====\n", nbytes);
-		hex_dump(buffer, DUMP_BYTES);
+		hex_dump("from STM32", buffer, DUMP_BYTES);
 
 		// if frontend is connected via socket
 		if (max_sd != listen_sd) {
@@ -181,9 +177,9 @@ void handleRead()
 			dlen = nbytes;
 			while (dlen) {
 				nbytes = send(max_sd, buffer, dlen, 0);
-				pr_info("send returned %d\n", nbytes);
+				pr_debug("frontend <- STM32 (%d bytes)\n", nbytes);
 				if (nbytes < 0) {
-					pr_info("error = %d dlen=%d\n", nbytes, dlen);
+					pr_err("error = %d dlen=%d\n", nbytes, dlen);
 					// I know it's ugly. :(
 					usleep(USLEEP_EAGAIN);
 				}
@@ -200,13 +196,13 @@ void handleWrite()
 	int nbytes, dlen;
 
 	if (FD_ISSET(fd, &wset)) {
-		puts("fd write set!!");
+		//pr_debug("fd write set!!");
 		dlen = dequeue(&txq, buffer, WRITE_SIZE);
 		while (dlen) {
 			nbytes = write(fd, buffer, dlen);
-			pr_info("write returned %d\n", nbytes);
+			pr_debug("write returned %d\n", nbytes);
 			if (nbytes < 0) {
-				pr_debug("error = %d dlen=%d\n", nbytes, dlen);
+				pr_err("error = %d dlen=%d\n", nbytes, dlen);
 				// I know it's ugly. :(
 				usleep(USLEEP_EAGAIN);
 			}
@@ -341,6 +337,8 @@ int main(int argc, char *argv[])
 
 		handleRead();
 		handleWrite();
+
+		//pr_debug("rxq = %d, txq = %d\n", getQueueSize(&rxq), getQueueSize(&txq));
 	}
 
 	close(listen_sd);
