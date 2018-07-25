@@ -13,7 +13,7 @@
 #include <math.h>
 #include "common.h"
 
-#define FAKE_WAVEFORM
+//#define FAKE_WAVEFORM
 
 #define SYNC_STR        "WOSC"
 #define SYNC_STR_SIZE   (sizeof(SYNC_STR) - 1)

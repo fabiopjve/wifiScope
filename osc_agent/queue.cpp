@@ -17,6 +17,17 @@ int isQueueFull(queue *q)
 	return q->head == (q->tail + 1) % MAX_QUEUE;
 }
 
+int getQueueSize(queue *q)
+{
+	//printf("\n%d %d\n", q->head, q->tail);
+	if (q->head == q->tail)
+		return 0;
+	if (q->tail > q->head)
+		return (q->tail - q->head);
+	else
+		return (MAX_QUEUE - q->head + q->tail);
+}
+
 // make sure len is bigger than available room in the queue
 // before calling this function!!
 void enqueue(queue *q, char *buff, int len)
@@ -44,8 +55,8 @@ void enqueue(queue *q, char *buff, int len)
 	}
 #endif
 
-	pr_debug("====== txq after enqueue (%d:%d)=====\n", q->head, q->tail);
-	hex_dump(q->buff, MAX_QUEUE);
+	//pr_debug("====== txq after enqueue (%d:%d)=====\n", q->head, q->tail);
+	//hex_dump(q->buff, MAX_QUEUE);
 }
 
 // If available data is less than len, just return the smaller size.
@@ -70,8 +81,8 @@ int dequeue(queue *q, char *buff, int len)
 	}
 #endif
 
-	pr_debug("====== txq after dequeue (%d:%d)=====\n", q->head, q->tail);
-	hex_dump(q->buff, MAX_QUEUE);
+	//pr_debug("====== txq after dequeue (%d:%d)=====\n", q->head, q->tail);
+	//hex_dump(q->buff, MAX_QUEUE);
 
 	return i;
 }
