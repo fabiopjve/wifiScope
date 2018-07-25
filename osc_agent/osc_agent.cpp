@@ -73,7 +73,7 @@ void forward_packet(int nbytes)
 	hex_dump("from frontend", buffer, DUMP_BYTES);
 	enqueue(&txq, buffer, nbytes);
 
-	pr_debug("-> Onion -> STM32 (%d bytes)\r\n", nbytes);
+	pr_debug("frontend -> STM32 (%d bytes)\r\n", nbytes);
 #endif
 
 	// if txq is empty
@@ -177,7 +177,7 @@ void handleRead()
 			dlen = nbytes;
 			while (dlen) {
 				nbytes = send(max_sd, buffer, dlen, 0);
-				pr_debug("frontend <- Onion <- STM32 (%d bytes)\n", nbytes);
+				pr_debug("frontend <- STM32 (%d bytes)\n", nbytes);
 				if (nbytes < 0) {
 					pr_err("error = %d dlen=%d\n", nbytes, dlen);
 					// I know it's ugly. :(

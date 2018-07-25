@@ -1,29 +1,34 @@
 #include <ctype.h>
 #include "common.h"
-#include "stm32f3xx_hal_adc.h"
 
-//#define DISABLE_ADC
-//#define USE_SW_TRG
-//#define USE_ADC_DUMP
+//#define ENABLE_LOG
+//#define ENABLE_ADC_DUMP
 //#define MANUAL_DMA_TEST
+//#define DISABLE_ADC
+//#define ENABLE_SW_TRG
+
+#ifndef ENABLE_LOG
+#define printf(fmt, ...)
+#define pr_err(fmt, ...)
+#else
+#define pr_err(fmt, ...) printf("%18s:%3d\n" fmt, __func__, __LINE__, ##__VA_ARGS__)
+#endif
 
 /* Max value with a full range of 12 bits */
 #define RANGE_12BITS		((uint32_t)4095)
-/* Timer frequency (unit: Hz). With SysClk set to 72MHz,
- * timer frequency TIMER_FREQUENCY_HZ range is min=1Hz, max=32.757kHz. */
-#define TIMER_FREQUENCY_HZ	((uint32_t)1000)
-/* Size of array ADC_samples[] */
+
+/* number of element of sampled data */
 #define ADC_SAMPLES_BUFFSIZE  64
-
-#define pr_err(fmt, ...) printf("%18s:%3d\n" fmt, __func__, __LINE__, ##__VA_ARGS__)
-
-/* Variable containing ADC conversions results */
-volatile uint16_t   ADC_samples[ADC_SAMPLES_BUFFSIZE];
 
 /* ADC handler declaration */
 ADC_HandleTypeDef    AdcHandle;
 /* TIM handler declaration */
 TIM_HandleTypeDef    TimHandle;
+
+/* Variable containing ADC conversions results */
+volatile uint16_t ADC_samples[ADC_SAMPLES_BUFFSIZE];
+volatile uint16_t samples[ADC_SAMPLES_BUFFSIZE];
+static volatile int AWD_event = 0;
 
 #ifndef DISABLE_ADC
 /**
@@ -34,7 +39,7 @@ TIM_HandleTypeDef    TimHandle;
 static void ADC_Config(void)
 {
 	ADC_ChannelConfTypeDef   sConfig;
-	//ADC_AnalogWDGConfTypeDef AnalogWDGConfig;
+	ADC_AnalogWDGConfTypeDef AnalogWDGConfig;
 
 	/* Configuration of ADC init structure: ADC parameters and regular group */
 	AdcHandle.Instance = ADC2;
@@ -54,7 +59,7 @@ static void ADC_Config(void)
 	AdcHandle.Init.DiscontinuousConvMode = DISABLE;
 	/* Parameter discarded because sequencer is disabled */
 	AdcHandle.Init.NbrOfDiscConversion   = 1;
-#ifndef USE_SW_TRG
+#ifndef ENABLE_SW_TRG
 	/* Trig of conversion start done by external event */
 	AdcHandle.Init.ExternalTrigConv      = ADC_EXTERNALTRIGCONV_T1_TRGO;
 	AdcHandle.Init.ExternalTrigConvEdge  = ADC_EXTERNALTRIGCONVEDGE_RISING;
@@ -87,26 +92,19 @@ static void ADC_Config(void)
 		pr_err();
 	}
 
-#if 0
-	/* Set analog watchdog thresholds in order to be between steps of DAC       */
-	/* voltage.                                                                 */
-	/*  - High threshold: between DAC steps 1/2 and 3/4 of full range:          */
-	/*                    5/8 of full range (4095 <=> Vdda=3.3V): 2559<=> 2.06V */
-	/*  - Low threshold:  between DAC steps 0 and 1/4 of full range:            */
-	/*                    1/8 of full range (4095 <=> Vdda=3.3V): 512 <=> 0.41V */
-
+#if 1
 	/* Analog watchdog 1 configuration */
 	AnalogWDGConfig.WatchdogNumber = ADC_ANALOGWATCHDOG_1;
 	AnalogWDGConfig.WatchdogMode = ADC_ANALOGWATCHDOG_ALL_REG;
 	AnalogWDGConfig.Channel = ADC_CHANNEL_1;
 	AnalogWDGConfig.ITMode = ENABLE;
-	AnalogWDGConfig.HighThreshold = (RANGE_12BITS * 5/8);
-	AnalogWDGConfig.LowThreshold = (RANGE_12BITS * 1/8);
+	AnalogWDGConfig.HighThreshold = (RANGE_12BITS * 6/8);
+	//AnalogWDGConfig.LowThreshold = (RANGE_12BITS * 2/8);
 	HAL_ADC_AnalogWDGConfig(&AdcHandle, &AnalogWDGConfig);
 #endif
 }
 
-#ifndef USE_SW_TRG
+#ifndef ENABLE_SW_TRG
 static void TIM_Config(void)
 {
 	TIM_MasterConfigTypeDef sMasterConfig;
@@ -115,24 +113,12 @@ static void TIM_Config(void)
 	TimHandle.Instance = TIM1;
 
 	/* Configure timer frequency */
-	/* Note: Setting of timer prescaler to 1099 to increase the maximum range   */
-	/*       of the timer, to fit within timer range of 0xFFFF.                 */
-	/*       Setting of reload period to SysClk/1099 to maintain a base         */
-	/*       frequency of 1us.                                                  */
-	/*       With SysClk set to 72MHz, timer frequency (defined by label        */
-	/*       TIMER_FREQUENCY_HZ range) is min=1Hz, max=32.757kHz.               */
-	/* Note: Timer clock source frequency is retrieved with function            */
-	/*       HAL_RCC_GetPCLK1Freq().                                            */
-	/*       Alternate possibility, depending on prescaler settings:            */
-	/*       use variable "SystemCoreClock" holding HCLK frequency, updated by  */
-	/*       function HAL_RCC_ClockConfig().                                    */
+	/* This should be changed according to the sampling rate setting by frontend */
 #if 1
-	TimHandle.Init.Period = ((HAL_RCC_GetPCLK2Freq() / (1099 * TIMER_FREQUENCY_HZ)) - 1);
+	TimHandle.Init.Period = ((HAL_RCC_GetPCLK2Freq() / (1099 * 1000)) - 1);
 	TimHandle.Init.Prescaler = (1099-1);
 #else
 	TimHandle.Init.Period = 10000 - 1;
-	//TimHandle.Init.Period = 5000 - 1;
-	//TimHandle.Init.Period = 1250 - 1;
 	TimHandle.Init.Prescaler = (uint32_t)(SystemCoreClock / 10000) - 1;
 #endif
 	TimHandle.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -155,9 +141,10 @@ static void TIM_Config(void)
 		pr_err();
 	}
 }
-#endif /* USE_SW_TRG */
+#endif /* ENABLE_SW_TRG */
 #endif /* DISABLE_ADC */
 
+/* this function will be called from HAL_ADC_Init function */
 void HAL_ADC_MspInit(ADC_HandleTypeDef *hadc)
 {
 	GPIO_InitTypeDef          GPIO_InitStruct;
@@ -250,7 +237,7 @@ static void TaskADCInit(void *data)
 	/* TIM1 peripheral clock enable */
 	__HAL_RCC_TIM1_CLK_ENABLE();
 
-#ifndef USE_SW_TRG
+#ifndef ENABLE_SW_TRG
 	/* Configure the TIM peripheral */
 	TIM_Config();
 
@@ -274,7 +261,6 @@ static void TaskADCInit(void *data) {}
 
 void TaskADC(void *data)
 {
-	;
 }
 
 void ADC1_2_IRQHandler(void)
@@ -290,44 +276,11 @@ void DMA2_Channel1_IRQHandler(void)
 
 }
 
+/* User Button Interrupt Handler */
 void EXTI15_10_IRQHandler(void)
 {
 	HAL_GPIO_EXTI_IRQHandler(B1_Pin);
-	//pr_err("");
-#ifdef MANUAL_DMA_TEST
-	//pr_err("Start ADC DMA again!!\n");
-	if (HAL_ADC_Start_DMA(&AdcHandle,
-			(uint32_t *)ADC_samples, ADC_SAMPLES_BUFFSIZE) != HAL_OK) {
-		/* Start Error */
-		//pr_err();
-	}
-#endif
-}
-
-/**
-  * @brief  Conversion complete callback in non blocking mode
-  * @param  AdcHandle : AdcHandle handle
-  * @note   This example shows a simple way to report end of conversion
-  *         and get conversion result. You can add your own implementation.
-  * @retval None
-  */
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *AdcHandle)
-{
-	//pr_err("");
-#ifdef USE_ADC_DUMP
-	//hex_dump(ADC_samples , 512);
-	for (int i=0;i<ADC_SAMPLES_BUFFSIZE;i++) {
-		printf("%03X ", ADC_samples[i]);
-		if ((i+1)%16 == 0)
-			printf("\n");
-	}
-#endif
-#ifdef MANUAL_DMA_TEST
-	if (HAL_ADC_Stop_DMA(AdcHandle) != HAL_OK) {
-		/* Start Error */
-		//pr_err();
-	}
-#endif
+	pr_err("");
 }
 
 /*
@@ -338,6 +291,38 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *AdcHandle)
 void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hadc)
 {
 	//pr_err("");
+}
+
+/**
+  * @brief  Conversion complete callback in non blocking mode
+  * @param  AdcHandle : AdcHandle handle
+  * @note   This example shows a simple way to report end of conversion
+  *         and get conversion result. You can add your own implementation.
+  * @retval None
+  */
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
+{
+	pr_err("");
+
+	if (AWD_event) {
+		/* copy sampled data to the another buffer to be used to send to frontend */
+		memcpy((void *)samples, (void *)ADC_samples,
+				sizeof(uint16_t)*ADC_SAMPLES_BUFFSIZE);
+		AWD_event = 0;
+		pr_err("memcpy!!\n");
+
+#ifdef ENABLE_ADC_DUMP
+		//hex_dump(samples, 512);
+		for (int i=0;i<ADC_SAMPLES_BUFFSIZE;i++) {
+			printf("%03X ", samples[i]);
+			if ((i+1)%16 == 0)
+				printf("\n");
+		}
+#endif
+	}
+
+	/* enable Analog Watchdog again */
+	__HAL_ADC_ENABLE_IT(hadc, ADC_IT_AWD1);
 }
 
 /**
@@ -352,7 +337,23 @@ void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hadc)
 void HAL_ADC_LevelOutOfWindowCallback(ADC_HandleTypeDef* hadc)
 {
 	/* Set variable to report analog watchdog out of window status to main program. */
-	//pr_err("");
+	pr_err("");
+
+	/* disable Analog Watchdog temporarily to save captured samples */
+	__HAL_ADC_DISABLE_IT(hadc, ADC_IT_AWD1);
+
+	AWD_event = 1;
+
+#if 0
+	if (HAL_ADC_Stop_DMA(hadc) != HAL_OK) {
+		pr_err();
+	}
+
+	if (HAL_ADC_Start_DMA(&hadc,
+			(uint32_t *)ADC_samples, ADC_SAMPLES_BUFFSIZE) != HAL_OK) {
+		pr_err();
+	}
+#endif
 }
 
 /**
@@ -363,9 +364,8 @@ void HAL_ADC_LevelOutOfWindowCallback(ADC_HandleTypeDef* hadc)
   */
 void HAL_ADC_ErrorCallback(ADC_HandleTypeDef *hadc)
 {
-  /* In case of ADC error, call main error handler */
-  Error_Handler();
+	/* In case of ADC error, call main error handler */
+	pr_err("");
 }
-
 
 ADD_TASK(TaskADC, TaskADCInit, NULL, "ADC task")

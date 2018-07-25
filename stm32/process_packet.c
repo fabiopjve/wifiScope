@@ -43,6 +43,11 @@ char debug[BUFFER_LEN];
 char input[BUFFER_LEN];
 char output[BUFFER_LEN];
 
+/* Size of array ADC_samples[] */
+#define ADC_SAMPLES_BUFFSIZE  64
+extern volatile uint16_t samples[ADC_SAMPLES_BUFFSIZE];
+extern volatile uint16_t ADC_samples[ADC_SAMPLES_BUFFSIZE];
+
 #if 1
 static void send_log(char *fmt, ...)
 {
@@ -126,10 +131,6 @@ void dataToHexString(unsigned int value, char size, char *buffer)
   }
 }
 
-/* Size of array ADC_samples[] */
-#define ADC_SAMPLES_BUFFSIZE  64
-extern volatile uint16_t   ADC_samples[ADC_SAMPLES_BUFFSIZE];
-
 void send_sample_buff(char *buff, int len)
 {
 	static int counter, offset;
@@ -162,7 +163,8 @@ void send_sample_buff(char *buff, int len)
 		//printf("%f (%04i/%04x)\r\n",sinRes,(int)val, (int)val);
 		dataToHexString((int)val,4,buffer);
 #else
-		dataToHexString((int)ADC_samples[x],4,buffer);
+		dataToHexString((int)samples[x],4,buffer);
+		//dataToHexString((int)ADC_samples[x],4,buffer);
 #endif
 		send(buffer, 4);
 	}
@@ -170,7 +172,7 @@ void send_sample_buff(char *buff, int len)
 	send(EOP_STR, 1);
 
 	//send("WOSC0005deDebug\n", 16);
-	//send_log("Thanks! Bro!");
+	//send_log("Thanks!");
 }
 
 void testfunc(char *buff, int len)

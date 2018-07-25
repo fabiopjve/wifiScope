@@ -5,9 +5,10 @@
 #ifndef __COMMON_H
 #define __COMMON_H
 
+#include <ctype.h>
+#include <string.h>
 #include <stdint.h>
 #include <time.h>
-#include <ctype.h>
 
 
 /* Include HAL definitions */
