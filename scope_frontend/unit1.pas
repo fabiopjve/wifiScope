@@ -17,23 +17,26 @@ type
     Button2: TButton;
     Chart1: TChart;
     Chart1LineSeries1: TLineSeries;
-    ComboBox1: TComboBox;
-    ComboBox2: TComboBox;
+    CBHorizontal: TComboBox;
+    CBTriggerMode: TComboBox;
+    serverIP: TEdit;
     GroupBox1: TGroupBox;
     GroupBox2: TGroupBox;
     Memo1: TMemo;
     StatusLabel: TLabel;
     tcp: TLTCPComponent;
-    SpinEdit1: TSpinEdit;
+    SETriggerLevel: TSpinEdit;
     Timer1: TTimer;
     udp: TLUDPComponent;
     SaveDialog1: TSaveDialog;
     sr1: TListChartSource;
     procedure Button1Click(Sender: TObject);
     procedure Button2Click(Sender: TObject);
-    procedure ComboBox1Change(Sender: TObject);
+    procedure CBHorizontalChange(Sender: TObject);
+    procedure CBTriggerModeChange(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure FormResize(Sender: TObject);
+    procedure SETriggerLevelChange(Sender: TObject);
     procedure tcpConnect(aSocket: TLSocket);
     procedure tcpDisconnect(aSocket: TLSocket);
     procedure tcpError(const msg: string; aSocket: TLSocket);
@@ -45,6 +48,7 @@ type
     function readCommand(command: integer): integer;
     procedure updateXaxis(max: integer; count: integer);
     procedure plotPoint(arrayIndex: integer; value: integer);
+    procedure GUIchange();
   public
 
   end;
@@ -118,14 +122,58 @@ begin
    end;
 end;
 
+procedure TForm1.GUIchange();
+var
+  value: integer;
+  error: integer;
+begin
+   updateXaxis(numSamples,CBHorizontal.ItemIndex);
+   // sends set sample rate command
+   sendCommand(CMD_SET_SAMPLE_RATE,sampleRate);
+   if (CBTriggerMode.ItemIndex = 1) then
+   begin
+     // sends set trigger type command
+     sendCommand(CMD_SET_TRIGGER_TYPE,$00);
+   end else
+   begin
+     // sends set trigger type command
+     sendCommand(CMD_SET_TRIGGER_TYPE,$01);
+   end;
+   // now checks trigger level
+   Val(SETriggerLevel.Text,value,error);
+   if error <> 0 then
+   begin
+      SETriggerLevel.Text := '0';
+   end;
+   if value>4095 then value := 4095;
+   if value<0 then value := 0;
+   SETriggerLevel.Text := intToStr(value);
+   sendCommand(CMD_SET_TRIGGER_LVL,value);
+end;
+
+procedure TForm1.SETriggerLevelChange(Sender: TObject);
+begin
+   GUIchange();
+end;
+
+procedure TForm1.CBHorizontalChange(Sender: TObject);
+begin
+   GUIchange();
+end;
+
+procedure TForm1.CBTriggerModeChange(Sender: TObject);
+begin
+   GUIchange();
+end;
+
+
 procedure TForm1.FormCreate(Sender: TObject);
 begin
   str := '';
   xAxis := 0;
   numSamples := 64;
   sampleRate := 0;
-  ComboBox1Change(self);
-  //udp.Listen(19743);
+  CBHorizontalChange(self);
 end;
 
 procedure TForm1.FormResize(Sender: TObject);
@@ -136,14 +184,14 @@ begin
      //Chart1.Height:=Form1.Height-90;
 end;
 
+
+
 procedure TForm1.tcpConnect(aSocket: TLSocket);
 begin
   StatusLabel.Caption:='Connected!';
   Timer1.Enabled:=true;
   receiveBuffer := '';
   Button1.Caption:='Disconnect';
-  // sends config commands
-  sendCommand($11,$08);
 end;
 
 procedure TForm1.tcpDisconnect(aSocket: TLSocket);
@@ -249,16 +297,17 @@ var
    index : integer;
    tmp: string;
 begin
-   tmp := '';
-   size := aSocket.Get(rcv,64);
-   tmp:= 'Size='+intToStr(size);
-   index := 1;
-   while (size>0) do
-   begin
-        tmp := tmp + ' ' + intToStr(rcv[index]);
-        dec(size);
-        inc(index);
-   end;
+  //serverIP.Text:=aSocket.LocalAddress;
+  tmp := '';
+  size := aSocket.Get(rcv,64);
+  tmp:= 'Size='+intToStr(size);
+  index := 1;
+  while (size>0) do
+  begin
+      tmp := tmp + ' ' + intToStr(rcv[index]);
+      dec(size);
+      inc(index);
+  end;
 end;
 
 procedure TForm1.Button2Click(Sender: TObject);
@@ -303,11 +352,6 @@ begin
   end;
 end;
 
-procedure TForm1.ComboBox1Change(Sender: TObject);
-begin
-  updateXaxis(numSamples,ComboBox1.ItemIndex);
-end;
-
 procedure TForm1.Button1Click(Sender: TObject);
 begin
      if tcp.Connected then begin
@@ -316,7 +360,7 @@ begin
         Button1.Caption:='Connect';
         StatusLabel.Caption:='Not connected ...';
      end else begin
-          tcp.Connect('localhost',5555);
+          tcp.Connect(serverIP.Text,5555);
      end;
 end;
 end.

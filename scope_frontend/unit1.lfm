@@ -1,7 +1,7 @@
 object Form1: TForm1
-  Left = 574
+  Left = 543
   Height = 500
-  Top = 150
+  Top = 140
   Width = 815
   Caption = 'Wireless Scope'
   ClientHeight = 500
@@ -47,14 +47,16 @@ object Form1: TForm1
     Color = clGreen
     ParentColor = False
     TabOrder = 2
-    object SpinEdit1: TSpinEdit
+    object SETriggerLevel: TSpinEdit
       Left = 8
       Height = 27
       Top = 48
       Width = 152
+      MaxValue = 4095
+      OnChange = SETriggerLevelChange
       TabOrder = 0
     end
-    object ComboBox2: TComboBox
+    object CBTriggerMode: TComboBox
       Left = 8
       Height = 29
       Top = 8
@@ -65,6 +67,7 @@ object Form1: TForm1
         'Rising Edge'
         'Falling Edge'
       )
+      OnChange = CBTriggerModeChange
       TabOrder = 1
       Text = 'Rising Edge'
     end
@@ -80,11 +83,11 @@ object Form1: TForm1
     Color = clTeal
     ParentColor = False
     TabOrder = 3
-    object ComboBox1: TComboBox
+    object CBHorizontal: TComboBox
       Left = 8
       Height = 29
       Top = 24
-      Width = 156
+      Width = 152
       AutoSize = False
       ItemHeight = 0
       ItemIndex = 0
@@ -94,7 +97,7 @@ object Form1: TForm1
         '1 msec'
         '100 usec'
       )
-      OnChange = ComboBox1Change
+      OnChange = CBHorizontalChange
       TabOrder = 0
       Text = '0.1 sec'
     end
@@ -146,11 +149,19 @@ object Form1: TForm1
   end
   object Memo1: TMemo
     Left = 640
-    Height = 162
-    Top = 280
+    Height = 144
+    Top = 272
     Width = 169
     ScrollBars = ssAutoBoth
     TabOrder = 5
+  end
+  object serverIP: TEdit
+    Left = 640
+    Height = 27
+    Top = 418
+    Width = 169
+    TabOrder = 6
+    Text = 'localhost'
   end
   object sr1: TListChartSource
     left = 88
@@ -159,7 +170,8 @@ object Form1: TForm1
     left = 128
   end
   object udp: TLUDPComponent
-    Port = 19743
+    Host = '127.0.0.1'
+    Port = 5556
     OnReceive = udpReceive
     Timeout = 0
     left = 48
