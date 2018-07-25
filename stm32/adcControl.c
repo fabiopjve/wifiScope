@@ -279,7 +279,7 @@ void TaskADC(void *data)
 
 void ADC1_2_IRQHandler(void)
 {
-	pr_err("");
+	//pr_err("");
 	HAL_ADC_IRQHandler(&AdcHandle);
 }
 
@@ -295,11 +295,11 @@ void EXTI15_10_IRQHandler(void)
 	HAL_GPIO_EXTI_IRQHandler(B1_Pin);
 	//pr_err("");
 #ifdef MANUAL_DMA_TEST
-	pr_err("Start ADC DMA again!!\n");
+	//pr_err("Start ADC DMA again!!\n");
 	if (HAL_ADC_Start_DMA(&AdcHandle,
 			(uint32_t *)ADC_samples, ADC_SAMPLES_BUFFSIZE) != HAL_OK) {
 		/* Start Error */
-		pr_err();
+		//pr_err();
 	}
 #endif
 }
@@ -313,7 +313,7 @@ void EXTI15_10_IRQHandler(void)
   */
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *AdcHandle)
 {
-	pr_err("");
+	//pr_err("");
 #ifdef USE_ADC_DUMP
 	//hex_dump(ADC_samples , 512);
 	for (int i=0;i<ADC_SAMPLES_BUFFSIZE;i++) {
@@ -325,7 +325,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *AdcHandle)
 #ifdef MANUAL_DMA_TEST
 	if (HAL_ADC_Stop_DMA(AdcHandle) != HAL_OK) {
 		/* Start Error */
-		pr_err();
+		//pr_err();
 	}
 #endif
 }
@@ -352,7 +352,7 @@ void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hadc)
 void HAL_ADC_LevelOutOfWindowCallback(ADC_HandleTypeDef* hadc)
 {
 	/* Set variable to report analog watchdog out of window status to main program. */
-	pr_err("");
+	//pr_err("");
 }
 
 /**
