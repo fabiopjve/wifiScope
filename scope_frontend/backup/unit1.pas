@@ -17,31 +17,38 @@ type
     Button2: TButton;
     Chart1: TChart;
     Chart1LineSeries1: TLineSeries;
-    ComboBox1: TComboBox;
-    ComboBox2: TComboBox;
+    CBHorizontal: TComboBox;
+    CBTriggerMode: TComboBox;
+    serverIP: TEdit;
     GroupBox1: TGroupBox;
     GroupBox2: TGroupBox;
+    Memo1: TMemo;
     StatusLabel: TLabel;
     tcp: TLTCPComponent;
-    SpinEdit1: TSpinEdit;
+    SETriggerLevel: TSpinEdit;
     Timer1: TTimer;
     udp: TLUDPComponent;
     SaveDialog1: TSaveDialog;
     sr1: TListChartSource;
     procedure Button1Click(Sender: TObject);
     procedure Button2Click(Sender: TObject);
+    procedure CBHorizontalChange(Sender: TObject);
+    procedure CBTriggerModeChange(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure FormResize(Sender: TObject);
+    procedure SETriggerLevelChange(Sender: TObject);
     procedure tcpConnect(aSocket: TLSocket);
     procedure tcpDisconnect(aSocket: TLSocket);
+    procedure tcpError(const msg: string; aSocket: TLSocket);
     procedure tcpReceive(aSocket: TLSocket);
     procedure Timer1Timer(Sender: TObject);
     procedure udpReceive(aSocket: TLSocket);
-
-    //procedure Serial1RxData(Sender: TObject);
   private
     procedure sendCommand(command: integer; data: integer);
     function readCommand(command: integer): integer;
+    procedure updateXaxis(max: integer; count: integer);
+    procedure plotPoint(arrayIndex: integer; value: integer);
+    procedure GUIchange();
   public
 
   end;
@@ -56,16 +63,17 @@ const
   CMD_READ_TRIGGER_LVL = $66;
   CMD_SET_TRIGGER_TYPE = $67;
   CMD_READ_TRIGGER_TYPE = $68;
+  CMD_READ_DEBUG_DATA = $DE;
   CMD_ACK = $FF;
 var
   Form1: TForm1;
   str: string;
   receiveBuffer : string;
   xAxis : integer;
-  currentCMD: integer;
   triggerLevel: integer;
   triggerMode: integer;
   sampleRate: integer;
+  numSamples: integer;
   data: array[0..2000] of integer;
 implementation
 
@@ -98,7 +106,7 @@ begin
    if tcp.Connected then
    begin
       strToSend := hexStr(command,2) + hexStr(data,4);
-      strToSend := 'WOSC'+hexStr(Length(StrToSend),4)+strToSend;
+      strToSend := 'WOSC0004'+strToSend+#10;
       tcp.SendMessage(strToSend);
    end;
 end;
@@ -109,17 +117,63 @@ var
 begin
    if tcp.Connected then
    begin
-      strToSend := hexStr(command,2);
-      strToSend := 'WOSC'+hexStr(Length(StrToSend),4)+strToSend;
+      strToSend := 'WOSC0002'+hexStr(command,2)+#10;
       tcp.SendMessage(strToSend);
    end;
 end;
+
+procedure TForm1.GUIchange();
+var
+  value: integer;
+  error: integer;
+begin
+   updateXaxis(numSamples,CBHorizontal.ItemIndex);
+   // sends set sample rate command
+   sendCommand(CMD_SET_SAMPLE_RATE,sampleRate);
+   if (CBTriggerMode.ItemIndex = 1) then
+   begin
+     // sends set trigger type command
+     sendCommand(CMD_SET_TRIGGER_TYPE,$00);
+   end else
+   begin
+     // sends set trigger type command
+     sendCommand(CMD_SET_TRIGGER_TYPE,$01);
+   end;
+   // now checks trigger level
+   Val(SETriggerLevel.Text,value,error);
+   if error <> 0 then
+   begin
+      SETriggerLevel.Text := '0';
+   end;
+   if value>4095 then value := 4095;
+   if value<0 then value := 0;
+   SETriggerLevel.Text := intToStr(value);
+   sendCommand(CMD_SET_TRIGGER_LVL,value);
+end;
+
+procedure TForm1.SETriggerLevelChange(Sender: TObject);
+begin
+   GUIchange();
+end;
+
+procedure TForm1.CBHorizontalChange(Sender: TObject);
+begin
+   GUIchange();
+end;
+
+procedure TForm1.CBTriggerModeChange(Sender: TObject);
+begin
+   GUIchange();
+end;
+
 
 procedure TForm1.FormCreate(Sender: TObject);
 begin
   str := '';
   xAxis := 0;
-  //udp.Listen(19743);
+  numSamples := 64;
+  sampleRate := 0;
+  CBHorizontalChange(self);
 end;
 
 procedure TForm1.FormResize(Sender: TObject);
@@ -130,19 +184,25 @@ begin
      //Chart1.Height:=Form1.Height-90;
 end;
 
+
+
 procedure TForm1.tcpConnect(aSocket: TLSocket);
 begin
   StatusLabel.Caption:='Connected!';
   Timer1.Enabled:=true;
   receiveBuffer := '';
   Button1.Caption:='Disconnect';
-  // sends config commands
-  sendCommand($11,$08);
 end;
 
 procedure TForm1.tcpDisconnect(aSocket: TLSocket);
 begin
   StatusLabel.Caption:='Not connected ...';
+  Button1.Caption:='Connect';
+end;
+
+procedure TForm1.tcpError(const msg: string; aSocket: TLSocket);
+begin
+  StatusLabel.Caption:='Connection error!';
 end;
 
 procedure TForm1.tcpReceive(aSocket: TLSocket);
@@ -156,22 +216,39 @@ var
   error: integer;
   len : integer;
   data: array[1..512] of integer;
+  currentCMD: integer;
 begin
   if tcp.GetMessage(s) > 0 then receiveBuffer := receiveBuffer + s;
   if (Pos('WOSC',receiveBuffer)>0) then
   begin
-    tempString := '0x'+Copy(receiveBuffer,5,4);
+    stringIndex := Pos('WOSC',receiveBuffer);
+    tempString := '0x'+Copy(receiveBuffer,stringIndex+4,4);
     Val(tempString,temp,error);
     len := 0;
     if error=0 then len := temp else exit;
-    tempString := '0x'+Copy(receiveBuffer,9,2);
-    Val(tempString,temp,error);
-    if error=0 then cmd:=temp else exit;
+    // get command
+    tempString := '0x'+Copy(receiveBuffer,stringIndex+8,2);
+    Val(tempString,currentCMD,error);
+    if error<>0 then
+    begin
+      Delete(receiveBuffer,1,stringIndex+10);
+      exit;
+    end;
     temp2 := Length(receiveBuffer)-10;
+    // if current packet length is less than packet length field we exit and wait for more data
     if temp2<len then exit;
-    stringIndex := 11;
+    // now decode the remainder of string
+    stringIndex := Pos('WOSC',receiveBuffer)+10;
     temp2 := len;
     arrayIndex := 1;
+    if currentCMD = CMD_READ_DEBUG_DATA then
+    begin
+      // if we have a debug command, append data to memo, delete string and return
+      memo1.Append(Copy(receiveBuffer,stringIndex,temp2));
+      Delete(receiveBuffer,1,stringIndex+temp2);
+      exit;
+    end;
+    // we have a reply for a command
     while len>0 do
     begin
       tempString := '0x'+Copy(receiveBuffer,stringIndex,4);
@@ -183,20 +260,24 @@ begin
     end;
     if temp2=4 then
     begin
-    case currentCMD of
-      CMD_READ_SAMPLE_RATE : sampleRate:= data[1];
-      CMD_READ_TRIGGER_LVL : triggerLevel := data[1];
-      CMD_READ_TRIGGER_TYPE : triggerMode := data[1];
-    end;
+      case currentCMD of
+        CMD_READ_SAMPLE_RATE : sampleRate:= data[1];
+        CMD_READ_TRIGGER_LVL : triggerLevel := data[1];
+        CMD_READ_TRIGGER_TYPE : triggerMode := data[1];
+      end;
     end else
     begin
-      Chart1.AxisList.BottomAxis.Range.Max:=temp2 div 4;
+      numSamples := temp2 div 4;
+      updateXaxis(numSamples,sampleRate);
+      sr1.Clear;
       for arrayIndex:=1 to (temp2 div 4) do
       begin
-        sr1.Clear;
-        sr1.Add(arrayIndex-1,data[arrayIndex]);
+        plotPoint(arrayIndex,data[arrayIndex]);
       end;
     end;
+    Delete(receiveBuffer,1,Pos('WOSC',receiveBuffer)+10+temp2);
+  end else
+  begin
     receiveBuffer := '';
   end;
 end;
@@ -205,7 +286,7 @@ procedure TForm1.Timer1Timer(Sender: TObject);
 begin
   if tcp.Connected then begin
      // these are periodic commands
-     sendCommand($22,$00);
+     readCommand(CMD_READ_SAMPLES);
   end;
 end;
 
@@ -216,24 +297,18 @@ var
    index : integer;
    tmp: string;
 begin
-     //Memo1.Append();
-     //udp.
-   tmp := '';
-   size := aSocket.Get(rcv,64);
-   tmp:= 'Size='+intToStr(size);
-   index := 1;
-   while (size>0) do
-   begin
-        tmp := tmp + ' ' + intToStr(rcv[index]);
-        dec(size);
-        inc(index);
-   end;
-   //Memo1.Append(tmp);
+  //serverIP.Text:=aSocket.LocalAddress;
+  tmp := '';
+  size := aSocket.Get(rcv,64);
+  tmp:= 'Size='+intToStr(size);
+  index := 1;
+  while (size>0) do
+  begin
+      tmp := tmp + ' ' + intToStr(rcv[index]);
+      dec(size);
+      inc(index);
+  end;
 end;
-
-
-
-
 
 procedure TForm1.Button2Click(Sender: TObject);
 begin
@@ -241,6 +316,40 @@ begin
      begin
           saveGraph(SaveDialog1.FileName);
      end;
+end;
+
+procedure TForm1.updateXaxis(max: integer; count: integer);
+begin
+  sampleRate := count;
+  numSamples := max;
+  case count of
+    0 : begin
+          Chart1.BottomAxis.Range.Max:=max/10;
+          Chart1.BottomAxis.Title.Caption:='seconds';
+        end;
+    1 : begin
+          Chart1.BottomAxis.Range.Max:=max*10;
+          Chart1.BottomAxis.Title.Caption:='milliseconds';
+        end;
+    2 : begin
+          Chart1.BottomAxis.Range.Max:=max;
+          Chart1.BottomAxis.Title.Caption:='milliseconds';
+        end;
+    3 : begin
+          Chart1.BottomAxis.Range.Max:=max*100;
+          Chart1.BottomAxis.Title.Caption:='microseconds';
+        end;
+  end;
+end;
+
+procedure TForm1.plotPoint(arrayIndex: integer; value: integer);
+begin
+  case sampleRate of
+    0 : sr1.Add((arrayIndex-1)/10,value);
+    1 : sr1.Add((arrayIndex-1)*10,value);
+    2 : sr1.Add((arrayIndex-1),value);
+    3 : sr1.Add((arrayIndex-1)*100,value);
+  end;
 end;
 
 procedure TForm1.Button1Click(Sender: TObject);
@@ -251,61 +360,8 @@ begin
         Button1.Caption:='Connect';
         StatusLabel.Caption:='Not connected ...';
      end else begin
-          tcp.Connect('localhost',5555);
+          tcp.Connect(serverIP.Text,5555);
      end;
 end;
-
-
-
-
-
-{
-
-procedure TForm1.Serial1RxData(Sender: TObject);
-var
-  tmp: string;
-  parse: string;
-  idx: integer;
-  result: integer;
-  ch: Char;
-begin
-  if Serial1.Active then
-  begin
-    parse:=Edit2.Text;
-    try
-       tmp := Serial1.ReadData;
-       str := str + tmp;
-    finally
-    end;
-    if Pos( Char(13) ,str)>0 then begin
-      idx:=Pos(parse,str);
-      if idx>0 then
-      begin
-        tmp:=str.Substring(idx+parse.Length);
-        result:=0;
-        idx:=0;
-        while true do
-        begin
-          ch:=tmp.Chars[idx];
-          if ch<'0' then break;
-          if ch>'9' then break;
-          if result<>0 then result := result*10;
-          result := result + (ord(ch)-ord('0'));
-          inc(idx);
-        end;
-        if (result<4096) and (xAxis<2000) then
-        begin
-          sr1.Add(xAxis,result);
-          data[xAxis] := result;
-          inc(xAxis);
-        end;
-        Memo1.Append(str+' -> '+intToStr(result));
-        Label2.Caption:=intToStr(result);
-      end;
-      str:='';
-    end;
-  end;
-end;
-}
 end.
 
