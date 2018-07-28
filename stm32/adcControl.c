@@ -29,6 +29,9 @@ TIM_HandleTypeDef    TimHandle;
 volatile uint16_t ADC_samples[ADC_SAMPLES_BUFFSIZE];
 volatile uint16_t samples[ADC_SAMPLES_BUFFSIZE];
 static volatile int AWD_event = 0;
+volatile uint16_t triggerLevel;
+volatile uint16_t triggerType;
+volatile uint16_t sampleRate;
 
 #ifndef DISABLE_ADC
 /**

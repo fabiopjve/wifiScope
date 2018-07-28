@@ -37,6 +37,9 @@
 
 void nullfunc(char *buff, int len);
 void testfunc(char *buff, int len);
+void setTriggerLevel(char *buff, int len);
+void setTriggerType(char *buff, int len);
+void setSampleRate(char *buff, int len);
 void send_sample_buff(char *buff, int len);
 
 char debug[BUFFER_LEN];
@@ -47,6 +50,9 @@ char output[BUFFER_LEN];
 #define ADC_SAMPLES_BUFFSIZE  64
 extern volatile uint16_t samples[ADC_SAMPLES_BUFFSIZE];
 extern volatile uint16_t ADC_samples[ADC_SAMPLES_BUFFSIZE];
+extern volatile uint16_t triggerLevel;
+extern volatile uint16_t triggerType;
+extern volatile uint16_t sampleRate;
 
 #if 1
 static void send_log(char *fmt, ...)
@@ -85,14 +91,14 @@ struct {
 	char type;
 	void (*func)(char *buff, int len);
 } pkt_handler[] = {
-	{ PKT_SET_SAMPLERATE,		nullfunc},
+	{ PKT_SET_SAMPLERATE,		setSampleRate},
 	{ PKT_READ_SAMPLERATE,		nullfunc},
 	{ PKT_READ_SAMPLEBUFFER,	send_sample_buff },
 	{ PKT_START_SAMPLING,		nullfunc},
 	{ PKT_STOP_SAMPLING,		nullfunc},
-	{ PKT_SET_TRIGGER_LEVEL,	nullfunc},
+	{ PKT_SET_TRIGGER_LEVEL,	setTriggerLevel},
 	{ PKT_READ_TRIGGER_LEVEL,	nullfunc},
-	{ PKT_SET_TRIGGER_TYPE,		nullfunc},
+	{ PKT_SET_TRIGGER_TYPE,		setTriggerType},
 	{ PKT_READ_TRIGGER_TYPE,	nullfunc},
 	{ PKT_READ_TRIGGER_TYPE,	nullfunc},
 	{ PKT_TEST,					testfunc},
@@ -102,6 +108,35 @@ struct {
 void nullfunc(char *buff, int len)
 {
 	// add your own debug routine
+}
+
+/*
+  long int getDataFromString(char *buf, char size)
+
+  Converts a hexadecimal string into an 8 or 16-bit integer
+
+  input:    char *buffer - the string with the data we want to convert
+            char size - 2 for bytes and 4 for words
+  returns:  long int - converted value or -1 if error  
+*/
+long int getDataFromString(char *buf, char size)
+{
+  unsigned char digit;
+  char index = 0;
+  long int result = 0;
+  if (size!=2 && size !=4) return -1;
+  while (index<size) {
+    digit = -1;
+    if (*buf>='0' && *buf<='9') digit = *buf - '0';
+    if (*buf>='A' && *buf<='F') digit = *buf - 'A' + 10; 
+    digit &= 0x0f;
+    if (digit<0) return -1;
+    result <<= 4;
+    result |= digit;
+    buf++;
+    index++;
+  }
+  return result;  
 }
 
 /*
@@ -190,6 +225,24 @@ void testfunc(char *buff, int len)
 	}
 	send(INDEX_DATA, EOP_STR, 1);
 #endif
+}
+
+void setTriggerLevel(char *buff, int len)
+{
+	triggerLevel = getDataFromString(buff,4);
+	send_log("Trigger level = %lu",triggerLevel);
+}
+
+void setSampleRate(char *buff, int len)
+{
+	sampleRate = getDataFromString(buff,4);
+	send_log("Sample rate = %lu",sampleRate);
+}
+
+void setTriggerType(char *buff, int len)
+{
+	triggerType = getDataFromString(buff,4);
+	send_log("Trigger type = %lu",triggerType);
 }
 
 void TaskProcessPacket(void *data)
