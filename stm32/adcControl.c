@@ -17,21 +17,92 @@
 /* Max value with a full range of 12 bits */
 #define RANGE_12BITS		((uint32_t)4095)
 
-/* number of element of sampled data */
-#define ADC_SAMPLES_BUFFSIZE  64
-
 /* ADC handler declaration */
 ADC_HandleTypeDef    AdcHandle;
 /* TIM handler declaration */
 TIM_HandleTypeDef    TimHandle;
 
 /* Variable containing ADC conversions results */
-volatile uint16_t ADC_samples[ADC_SAMPLES_BUFFSIZE];
-volatile uint16_t samples[ADC_SAMPLES_BUFFSIZE];
+volatile uint16_t ADC_samples[ADC_SAMPLES_BUFFSIZE], workingSamples[ADC_SAMPLES_BUFFSIZE];
+volatile uint16_t samples[SCOPE_SAMPLES_BUFFSIZE];
 static volatile int AWD_event = 0;
+static volatile uint8_t conversionComplete;
 volatile uint16_t triggerLevel;
 volatile uint16_t triggerType;
 volatile uint16_t sampleRate;
+volatile enum {
+	TRIGGER_WAITING,
+	TRIGGER_FIRED,
+	TRIGGER_HOLDOFF,
+	TRIGGER_DONE
+} triggerMode;
+
+/*
+*   gpioConfigPinDirection - config a pin direction
+*
+*   GPIO_Typedef port - port specifier
+*   uint8_t pin - pin number (0 to 15)
+*   uint8_t dir - direction (1 = input, 0 = output)
+*   uint8_t speed - speed (0 = low, 1 = medium, >=2 = high)
+*/
+int32_t gpioConfigPinDirection(GPIO_TypeDef *port, uint8_t pin, uint8_t dir, uint8_t speed)
+{
+  if (pin>15 || port==NULL) {
+    return -1;
+  } 
+  if (!dir) {  // output mode
+      // each port pin is controlled by two bits of MODER:
+      // first we erase both control bits
+      port->MODER &= ~(3 << pin*2);
+      // now we set the first bit of MODER
+      port->MODER |= 1 << pin*2;        
+      // now we set the output type to push-pull
+      port->OTYPER &= 1 << pin;
+      // set pin speed
+      port->OSPEEDR &= ~(3 << pin*2);
+      if (speed>=2) speed = 3;
+      port->OSPEEDR |= speed << pin*2;
+  } else {    // input mode
+      // each port pin is controlled by two bits of MODER:
+      // input mode -> both bits in zero
+      port->MODER &= ~(3 << pin*2);
+  }  
+  return 0; 
+}
+
+/*
+*   gpioOutput - set a pin as output and update its state
+*
+*   GPIO_Typedef port - port specifier
+*   uint8_t pin - pin number (0 to 15)
+*   uint8_t dir - state
+*/
+int32_t gpioOutput(GPIO_TypeDef *port, uint8_t pin, uint8_t state)
+{
+  if (pin>15 || port==NULL) {
+    return -1;
+  }
+  if (state) {
+      port -> BSRR |= 1 << pin;
+  } else {
+      port -> BSRR |= 0x10000 << pin;
+  }
+  return 0;  
+}
+
+/*
+*   gpioRead - read a pin state
+*
+*   GPIO_Typedef port - port specifier
+*   uint8_t pin - pin number (0 to 15)
+*   return uint8_t - pin state
+*/
+int32_t gpioRead(GPIO_TypeDef *port, uint8_t pin)
+{
+  uint32_t res = 0;
+  res = (port->IDR & (1 << pin)) ? 1 : 0;
+  return res;
+}
 
 #ifndef DISABLE_ADC
 /**
@@ -42,12 +113,11 @@ volatile uint16_t sampleRate;
 static void ADC_Config(void)
 {
 	ADC_ChannelConfTypeDef   sConfig;
-	ADC_AnalogWDGConfTypeDef AnalogWDGConfig;
 
 	/* Configuration of ADC init structure: ADC parameters and regular group */
 	AdcHandle.Instance = ADC2;
 
-	AdcHandle.Init.ClockPrescaler        = ADC_CLOCK_SYNC_PCLK_DIV4;
+	AdcHandle.Init.ClockPrescaler        = ADC_CLOCK_SYNC_PCLK_DIV1;
 	AdcHandle.Init.Resolution            = ADC_RESOLUTION_12B;
 	AdcHandle.Init.DataAlign             = ADC_DATAALIGN_RIGHT;
 	/* Sequencer disabled (ADC conversion on only 1 channel: channel set on rank 1) */
@@ -85,7 +155,7 @@ static void ADC_Config(void)
 	/*       duration to not create an overhead situation in IRQHandler.        */
 	sConfig.Channel      = ADC_CHANNEL_1;
 	sConfig.Rank         = ADC_REGULAR_RANK_1;
-	sConfig.SamplingTime = ADC_SAMPLETIME_181CYCLES_5;
+	sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
 	sConfig.SingleDiff   = ADC_SINGLE_ENDED;
 	sConfig.OffsetNumber = ADC_OFFSET_NONE;
 	sConfig.Offset       = 0;
@@ -94,8 +164,9 @@ static void ADC_Config(void)
 		/* Channel Configuration Error */
 		pr_err();
 	}
-
-#if 1
+	gpioConfigPinDirection(GPIOC,3,0,3);
+#if 0
+	ADC_AnalogWDGConfTypeDef AnalogWDGConfig;
 	/* Analog watchdog 1 configuration */
 	AnalogWDGConfig.WatchdogNumber = ADC_ANALOGWATCHDOG_1;
 	AnalogWDGConfig.WatchdogMode = ADC_ANALOGWATCHDOG_ALL_REG;
@@ -108,7 +179,7 @@ static void ADC_Config(void)
 }
 
 #ifndef ENABLE_SW_TRG
-static void TIM_Config(void)
+void TIM_Config(void)
 {
 	TIM_MasterConfigTypeDef sMasterConfig;
 
@@ -118,8 +189,20 @@ static void TIM_Config(void)
 	/* Configure timer frequency */
 	/* This should be changed according to the sampling rate setting by frontend */
 #if 1
-	TimHandle.Init.Period = ((HAL_RCC_GetPCLK2Freq() / (1099 * 1000)) - 1);
-	TimHandle.Init.Prescaler = (1099-1);
+	//TimHandle.Init.Period = ((HAL_RCC_GetPCLK2Freq() / (1099 * 1000)) - 1);
+	//TimHandle.Init.Prescaler = (1099-1);
+	TimHandle.Init.Prescaler = 71;
+	switch (sampleRate) {
+		default:
+		case 0:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/72/400-1; break;		// sample-rate 400Hz
+		case 1:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/72/2000-1; break;	// sample-rate 2kHz
+		case 2:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/72/4000-1; break;	// sample-rate 4kHz
+		case 3:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/72/8000-1; break;	// sample-rate 8kHz
+		case 4:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/72/20000-1; break;	// sample-rate 20kHz
+		case 5:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/72/40000-1; break;	// sample-rate 40kHz
+		case 6:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/72/100000-1; break;	// sample-rate 100kHz
+		case 7:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/72/200000-1; break;	// sample-rate 200kHz
+	}
 #else
 	TimHandle.Init.Period = 10000 - 1;
 	TimHandle.Init.Prescaler = (uint32_t)(SystemCoreClock / 10000) - 1;
@@ -151,7 +234,6 @@ static void TIM_Config(void)
 void HAL_ADC_MspInit(ADC_HandleTypeDef *hadc)
 {
 	GPIO_InitTypeDef          GPIO_InitStruct;
-	static DMA_HandleTypeDef  DmaHandle;
 	RCC_PeriphCLKInitTypeDef  RCC_PeriphCLKInitStruct;
 
 	/* Enable clock of GPIO associated to the peripheral channels */
@@ -182,6 +264,8 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef *hadc)
 	GPIO_InitStruct.Pull = GPIO_NOPULL;
 	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
+#if 1
+	static DMA_HandleTypeDef  DmaHandle;
 	/* Configure DMA parameters */
 	DmaHandle.Instance = DMA2_Channel1;
 
@@ -206,6 +290,7 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef *hadc)
 	/* Priority: high-priority */
 	HAL_NVIC_SetPriority(DMA2_Channel1_IRQn, 1, 0);
 	HAL_NVIC_EnableIRQ(DMA2_Channel1_IRQn);
+#endif
 
 	/* NVIC configuration for ADC interrupt */
 	/* Priority: high-priority */
@@ -250,20 +335,80 @@ static void TaskADCInit(void *data)
 		pr_err();
 	}
 #endif
-
+#if 0
+	/* Start ADC conversion on regular group with interrupts */
+	if (HAL_ADC_Start_IT(&AdcHandle) != HAL_OK) {
+		/* Start Error */
+		pr_err();
+	}
+#else
 	/* Start ADC conversion on regular group with transfer by DMA */
 	if (HAL_ADC_Start_DMA(&AdcHandle,
 			(uint32_t *)ADC_samples, ADC_SAMPLES_BUFFSIZE) != HAL_OK) {
 		/* Start Error */
 		pr_err();
 	}
+#endif
 }
 #else
 static void TaskADCInit(void *data) {}
 #endif
 
+void checkTrigger(void) 
+{
+	uint16_t currentSample, previousSample, index;
+	//check if we have a trigger condition within our working buffer
+	for (index=10;index<ADC_SAMPLES_BUFFSIZE;index++) {
+		currentSample = workingSamples[index];
+		previousSample = workingSamples[index-1];
+		switch (triggerMode) {
+			case TRIGGER_WAITING:	// we are waiting for trigger conditions
+				if (index>=SCOPE_SAMPLES_BUFFSIZE) return;
+				switch (triggerType) {
+					case 0:	// rising edge trigger
+						if (currentSample>=triggerLevel && previousSample<triggerLevel) {
+							// we have a rising edge ! Copy samples to buffer and wait for trigger hold off
+							for (uint16_t x=0; x<SCOPE_SAMPLES_BUFFSIZE; x++) samples[x] = workingSamples[index-10+x];
+							triggerMode = TRIGGER_HOLDOFF;
+						}
+						break;
+					case 1:	// falling edge trigger
+						if (currentSample<=triggerLevel && previousSample>triggerLevel) {
+							// we have a falling edge ! Copy samples to buffer and wait for trigger hold off
+							for (uint16_t x=0; x<SCOPE_SAMPLES_BUFFSIZE; x++) samples[x] = workingSamples[index-10+x];
+							triggerMode = TRIGGER_HOLDOFF;
+						}
+						break;					
+				}
+				break;			
+			case TRIGGER_HOLDOFF:	// this is post-trigger event, wait for signal to go on opposite direction of trigger
+				switch (triggerType) {
+					case 0:	// rising edge trigger, wait for signal to go below trigger level
+						if (currentSample<triggerLevel) {
+							triggerMode = TRIGGER_DONE;
+							return;
+						}
+						break;
+					case 1:	// falling edge trigger, wait for signal to go above trigger level
+						if (currentSample>triggerLevel) {
+							triggerMode = TRIGGER_DONE;
+							return;
+						}
+						break;					
+				}
+				break;
+			default:
+				triggerMode = TRIGGER_WAITING;		
+		}
+	}
+}
+
 void TaskADC(void *data)
 {
+	if (conversionComplete) {
+		checkTrigger();
+		conversionComplete = 0;
+	}
 }
 
 void ADC1_2_IRQHandler(void)
@@ -296,6 +441,7 @@ void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hadc)
 	//pr_err("");
 }
 
+
 /**
   * @brief  Conversion complete callback in non blocking mode
   * @param  AdcHandle : AdcHandle handle
@@ -306,9 +452,78 @@ void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hadc)
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
 	pr_err("");
+	gpioOutput(GPIOC,3,!gpioRead(GPIOC,3));
+	// we just copy our samples to another buffer
+	memcpy((void *)workingSamples, (void *)ADC_samples,sizeof(uint16_t)*ADC_SAMPLES_BUFFSIZE);	
+	conversionComplete = 1;
+}
 
+#if 0
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
+{
+#if 1
+	static uint16_t arrayIndex, latestIndex;
+	static uint16_t latestSamples[8];
+	uint16_t currentReading, tempIndex;
+	pr_err("");
+	currentReading = HAL_ADC_GetValue(hadc);
+	switch (triggerMode) {
+		case TRIGGER_WAITING:	// we are waiting for trigger conditions
+			switch (triggerType) {
+				case 0:	// rising edge trigger
+					if (	currentReading>=triggerLevel && 
+							PREV_SAMPL(latestSamples,latestIndex)<triggerLevel) {
+						// we have a rising edge ! Copy last four samples to buffer and go to triggered state
+						tempIndex = (latestIndex - 6) & 0x07;
+						arrayIndex = 0;
+						for (uint16_t x=0;x<6;x++) {
+							ADC_samples[arrayIndex++] = latestSamples[tempIndex++];
+							tempIndex &= 0x07;
+						}
+						triggerMode = TRIGGER_FIRED;
+					}
+					break;
+				case 1:	// falling edge trigger
+					if (	currentReading<=triggerLevel && 
+							PREV_SAMPL(latestSamples,latestIndex)>triggerLevel) {
+						// we have a falling edge ! Copy last four samples to buffer and go to triggered state
+						tempIndex = (latestIndex - 6) & 0x07;
+						arrayIndex = 0;
+						for (uint16_t x=0;x<6;x++) {
+							ADC_samples[arrayIndex++] = latestSamples[tempIndex++];
+							tempIndex &= 0x07;
+						}
+						triggerMode = TRIGGER_FIRED;
+					}
+					break;					
+			}
+			break;			
+		case TRIGGER_FIRED:		// we are triggered, store sample into sample buffer
+			ADC_samples[arrayIndex++] = currentReading;
+			if (arrayIndex>=ADC_SAMPLES_BUFFSIZE) {
+				triggerMode = TRIGGER_HOLDOFF;
+				memcpy(	(void *)samples, (void *)ADC_samples,
+						sizeof(uint16_t)*ADC_SAMPLES_BUFFSIZE);				
+			}
+			break;
+		case TRIGGER_HOLDOFF:	// this is post-trigger event, wait for signal to go on opposite direction of trigger
+			switch (triggerType) {
+				case 0:	// rising edge trigger, wait for signal to go below trigger level
+					if (currentReading<triggerLevel) triggerMode = TRIGGER_WAITING;
+					break;
+				case 1:	// falling edge trigger, wait for signal to go above trigger level
+					if (currentReading>triggerLevel) triggerMode = TRIGGER_WAITING;
+					break;					
+			}
+			break;		
+	}
+	latestSamples[latestIndex++] = currentReading;
+	latestIndex &= 0x07;
+	gpioOutput(GPIOC,3,!gpioRead(GPIOC,3));
+#else
+	pr_err("");
 	if (AWD_event) {
-		/* copy sampled data to the another buffer to be used to send to frontend */
+		// copy sampled data to the another buffer to be used to send to frontend
 		memcpy((void *)samples, (void *)ADC_samples,
 				sizeof(uint16_t)*ADC_SAMPLES_BUFFSIZE);
 		AWD_event = 0;
@@ -323,10 +538,11 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 		}
 #endif
 	}
-
 	/* enable Analog Watchdog again */
 	__HAL_ADC_ENABLE_IT(hadc, ADC_IT_AWD1);
+#endif
 }
+#endif
 
 /**
   * @brief  Analog watchdog callback in non blocking mode.

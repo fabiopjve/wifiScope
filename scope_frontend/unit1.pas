@@ -5,9 +5,9 @@ unit Unit1;
 interface
 
 uses
-  Classes, SysUtils, FileUtil, TAGraph, TASources, TASeries, Forms, Controls,
-  Graphics, Dialogs, StdCtrls, ExtCtrls, Spin, LazSerial,
-  lNetComponents, lNet;
+  Classes, SysUtils, FileUtil, TAGraph, TASources, TASeries, TAStyles, Forms,
+  Controls, Graphics, Dialogs, StdCtrls, ExtCtrls, Spin, LazSerial,
+  lNetComponents, lNet, LMessages;
 
 type
 
@@ -16,6 +16,7 @@ type
     Button1: TButton;
     Button2: TButton;
     Chart1: TChart;
+    Chart1ConstantLine1: TConstantLine;
     Chart1LineSeries1: TLineSeries;
     CBHorizontal: TComboBox;
     CBTriggerMode: TComboBox;
@@ -23,6 +24,7 @@ type
     GroupBox1: TGroupBox;
     GroupBox2: TGroupBox;
     Memo1: TMemo;
+    TriggerFrequencyLabel: TStaticText;
     StatusLabel: TLabel;
     tcp: TLTCPComponent;
     SETriggerLevel: TSpinEdit;
@@ -34,7 +36,9 @@ type
     procedure Button2Click(Sender: TObject);
     procedure CBHorizontalChange(Sender: TObject);
     procedure CBTriggerModeChange(Sender: TObject);
+    procedure Chart1Click(Sender: TObject);
     procedure FormCreate(Sender: TObject);
+    procedure FormKeyPress(Sender: TObject; var Key: char);
     procedure FormResize(Sender: TObject);
     procedure SETriggerLevelChange(Sender: TObject);
     procedure tcpConnect(aSocket: TLSocket);
@@ -133,11 +137,11 @@ begin
    if (CBTriggerMode.ItemIndex = 1) then
    begin
      // sends set trigger type command
-     sendCommand(CMD_SET_TRIGGER_TYPE,$00);
+     sendCommand(CMD_SET_TRIGGER_TYPE,$01);
    end else
    begin
      // sends set trigger type command
-     sendCommand(CMD_SET_TRIGGER_TYPE,$01);
+     sendCommand(CMD_SET_TRIGGER_TYPE,$00);
    end;
    // now checks trigger level
    Val(SETriggerLevel.Text,value,error);
@@ -145,10 +149,14 @@ begin
    begin
       SETriggerLevel.Text := '0';
    end;
-   if value>4095 then value := 4095;
+   if value>3300 then value := 3300;
    if value<0 then value := 0;
+   Chart1ConstantLine1.Position:= value/1000;
    SETriggerLevel.Text := intToStr(value);
-   sendCommand(CMD_SET_TRIGGER_LVL,value);
+
+   value := value * 124091;
+   triggerLevel := value div 100000;
+   sendCommand(CMD_SET_TRIGGER_LVL,triggerLevel);
 end;
 
 procedure TForm1.SETriggerLevelChange(Sender: TObject);
@@ -158,12 +166,18 @@ end;
 
 procedure TForm1.CBHorizontalChange(Sender: TObject);
 begin
+   sr1.Clear;
    GUIchange();
 end;
 
 procedure TForm1.CBTriggerModeChange(Sender: TObject);
 begin
    GUIchange();
+end;
+
+procedure TForm1.Chart1Click(Sender: TObject);
+begin
+   Chart1LineSeries1.ShowPoints:= not Chart1LineSeries1.ShowPoints;
 end;
 
 
@@ -176,6 +190,11 @@ begin
   CBHorizontalChange(self);
 end;
 
+procedure TForm1.FormKeyPress(Sender: TObject; var Key: char);
+begin
+
+end;
+
 procedure TForm1.FormResize(Sender: TObject);
 begin
      if Form1.Width<815 then Form1.Width:=815;
@@ -184,14 +203,13 @@ begin
      //Chart1.Height:=Form1.Height-90;
 end;
 
-
-
 procedure TForm1.tcpConnect(aSocket: TLSocket);
 begin
   StatusLabel.Caption:='Connected!';
   Timer1.Enabled:=true;
   receiveBuffer := '';
   Button1.Caption:='Disconnect';
+  GUIchange();
 end;
 
 procedure TForm1.tcpDisconnect(aSocket: TLSocket);
@@ -215,8 +233,10 @@ var
   value: integer;
   error: integer;
   len : integer;
-  data: array[1..512] of integer;
+  freqStart, freqEnd: integer;
+  data: array[1..1024] of integer;
   currentCMD: integer;
+  frequency : double;
 begin
   if tcp.GetMessage(s) > 0 then receiveBuffer := receiveBuffer + s;
   if (Pos('WOSC',receiveBuffer)>0) then
@@ -244,7 +264,7 @@ begin
     if currentCMD = CMD_READ_DEBUG_DATA then
     begin
       // if we have a debug command, append data to memo, delete string and return
-      memo1.Append(Copy(receiveBuffer,stringIndex,temp2));
+      memo1.Append(Copy(receiveBuffer,stringIndex,temp2-1));
       Delete(receiveBuffer,1,stringIndex+temp2);
       exit;
     end;
@@ -268,11 +288,39 @@ begin
     end else
     begin
       numSamples := temp2 div 4;
+      freqStart := -1;
+      freqEnd := -1;
       updateXaxis(numSamples,sampleRate);
       sr1.Clear;
-      for arrayIndex:=1 to (temp2 div 4) do
+      for arrayIndex:=1 to numSamples do
       begin
         plotPoint(arrayIndex,data[arrayIndex]);
+        if arrayIndex>1 then
+        begin
+          if (data[arrayIndex]>=triggerLevel) and (data[arrayIndex-1]<triggerLevel) and (freqStart = -1) then freqStart := arrayIndex;
+          if (freqStart <> -1) and (data[arrayIndex]<triggerLevel) and (freqEnd = -1) then freqEnd := arrayIndex;
+        end;
+      end;
+      // now we try to calculate trigger frequency
+      if (freqStart=-1) or (freqEnd=-1) then
+      begin
+        // we can't calculate trigger frequency
+        TriggerFrequencyLabel.Caption:='F = ---- Hz';
+      end else
+      begin
+        // calculate frequency
+        case sampleRate of
+          0 : frequency := 1/((freqEnd-freqStart)*0.0025*2);
+          1 : frequency := 1/((freqEnd-freqStart)*0.0005*2);
+          2 : frequency := 1/((freqEnd-freqStart)*0.00025*2);
+          3 : frequency := 1/((freqEnd-freqStart)*0.000125*2);
+          4 : frequency := 1/((freqEnd-freqStart)*0.00005*2);
+          5 : frequency := 1/((freqEnd-freqStart)*0.000025*2);
+          6 : frequency := 1/((freqEnd-freqStart)*0.00001*2);
+          7 : frequency := 1/((freqEnd-freqStart)*0.000005*2);
+        end;
+        TriggerFrequencyLabel.Caption:='F = '+FormatFloat('#####0.00',frequency)+'Hz';
+        TriggerFrequencyLabel.Visible:= true;
       end;
     end;
     Delete(receiveBuffer,1,Pos('WOSC',receiveBuffer)+10+temp2);
@@ -324,32 +372,64 @@ begin
   numSamples := max;
   case count of
     0 : begin
-          Chart1.BottomAxis.Range.Max:=max/10;
-          Chart1.BottomAxis.Title.Caption:='seconds';
+          Chart1.BottomAxis.Range.Max:=295;
+          Chart1.BottomAxis.Range.Min:=-25;
+          Chart1.BottomAxis.Intervals.NiceSteps:='0.25|0.5|1.0';
+          Chart1.BottomAxis.Title.Caption:='milliseconds';
         end;
     1 : begin
-          Chart1.BottomAxis.Range.Max:=max*10;
+          Chart1.BottomAxis.Range.Max:=59;
+          Chart1.BottomAxis.Range.Min:=-5;
+          Chart1.BottomAxis.Intervals.NiceSteps:='0.2|0.5|1.0';
           Chart1.BottomAxis.Title.Caption:='milliseconds';
         end;
     2 : begin
-          Chart1.BottomAxis.Range.Max:=max;
+          Chart1.BottomAxis.Range.Max:=29.5;
+          Chart1.BottomAxis.Range.Min:=-2.5;
+          Chart1.BottomAxis.Intervals.NiceSteps:='0.25|0.5|1.0';
           Chart1.BottomAxis.Title.Caption:='milliseconds';
         end;
     3 : begin
-          Chart1.BottomAxis.Range.Max:=max*100;
+          Chart1.BottomAxis.Range.Max:=14.75;
+          Chart1.BottomAxis.Range.Min:=-1.25;
+          Chart1.BottomAxis.Intervals.NiceSteps:='0.25|0.5|1.0';
+          Chart1.BottomAxis.Title.Caption:='milliseconds';
+        end;
+    4 : begin
+          Chart1.BottomAxis.Range.Max:=5900;
+          Chart1.BottomAxis.Range.Min:=-500;
+          Chart1.BottomAxis.Intervals.NiceSteps:='0.2|0.5|1.0';
+          Chart1.BottomAxis.Title.Caption:='microseconds';
+        end;
+    5 : begin
+          Chart1.BottomAxis.Range.Max:=2950;
+          Chart1.BottomAxis.Range.Min:=-250;
+          Chart1.BottomAxis.Intervals.NiceSteps:='0.25|0.5|1.0';
+          Chart1.BottomAxis.Title.Caption:='microseconds';
+        end;
+    6 : begin
+          Chart1.BottomAxis.Range.Max:=1475;
+          Chart1.BottomAxis.Range.Min:=-125;
+          Chart1.BottomAxis.Intervals.NiceSteps:='0.2|0.5|1.0';
+          Chart1.BottomAxis.Title.Caption:='microseconds';
+        end;
+    7 : begin
+          Chart1.BottomAxis.Range.Max:=590;
+          Chart1.BottomAxis.Range.Min:=-50;
+          Chart1.BottomAxis.Intervals.NiceSteps:='0.25|0.5|1.0';
           Chart1.BottomAxis.Title.Caption:='microseconds';
         end;
   end;
 end;
 
 procedure TForm1.plotPoint(arrayIndex: integer; value: integer);
+var
+   multiplier : single;
 begin
-  case sampleRate of
-    0 : sr1.Add((arrayIndex-1)/10,value);
-    1 : sr1.Add((arrayIndex-1)*10,value);
-    2 : sr1.Add((arrayIndex-1),value);
-    3 : sr1.Add((arrayIndex-1)*100,value);
-  end;
+  if value<0 then value := 0;
+  if value>4095 then value := 4095;
+  multiplier := (Chart1.BottomAxis.Range.Max-Chart1.BottomAxis.Range.Min)/numSamples;
+  sr1.Add((arrayIndex-11)*multiplier,(3.3/4096)*value);
 end;
 
 procedure TForm1.Button1Click(Sender: TObject);

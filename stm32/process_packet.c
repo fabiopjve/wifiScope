@@ -47,8 +47,7 @@ char input[BUFFER_LEN];
 char output[BUFFER_LEN];
 
 /* Size of array ADC_samples[] */
-#define ADC_SAMPLES_BUFFSIZE  64
-extern volatile uint16_t samples[ADC_SAMPLES_BUFFSIZE];
+extern volatile uint16_t samples[SCOPE_SAMPLES_BUFFSIZE];
 extern volatile uint16_t ADC_samples[ADC_SAMPLES_BUFFSIZE];
 extern volatile uint16_t triggerLevel;
 extern volatile uint16_t triggerType;
@@ -168,23 +167,15 @@ void dataToHexString(unsigned int value, char size, char *buffer)
 
 void send_sample_buff(char *buff, int len)
 {
-	static int counter, offset;
 	char *buffer;
 	//unsigned int value = 0;
-	int bufferSize = 64;
+	int bufferSize = SCOPE_SAMPLES_BUFFSIZE;
 
 	buffer = alloca(bufferSize);
 	if (buffer==NULL) {
 		printf("sendData error: could not allocate memory\n");
 		return;
 	}
-
-	if (1) {
-		offset++;
-		if (offset>30) offset=0;
-		counter = 0;
-	} else
-		counter++;
 
 	send(SYNC_STR, 4);
 	dataToHexString(bufferSize*4,4,buffer);
@@ -236,6 +227,7 @@ void setTriggerLevel(char *buff, int len)
 void setSampleRate(char *buff, int len)
 {
 	sampleRate = getDataFromString(buff,4);
+	TIM_Config();
 	send_log("Sample rate = %lu",sampleRate);
 }
 
