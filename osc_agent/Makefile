@@ -1,6 +1,6 @@
 CFLAGS=-I.
 
-PREFIX	=	mipsel-openwrt-linux-
+#PREFIX	=	mipsel-openwrt-linux-
 CC=$(PREFIX)gcc
 AR=$(PREFIX)ar
 AS=$(PREFIX)as

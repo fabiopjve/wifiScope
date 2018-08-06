@@ -23,7 +23,7 @@ ADC_HandleTypeDef    AdcHandle;
 TIM_HandleTypeDef    TimHandle;
 
 /* Variable containing ADC conversions results */
-volatile uint16_t ADC_samples[ADC_SAMPLES_BUFFSIZE], workingSamples[ADC_SAMPLES_BUFFSIZE];
+volatile uint16_t ADC_samples[ADC_SAMPLES_BUFFSIZE];
 volatile uint16_t samples[SCOPE_SAMPLES_BUFFSIZE];
 static volatile int AWD_event = 0;
 static volatile uint8_t conversionComplete;
@@ -164,7 +164,6 @@ static void ADC_Config(void)
 		/* Channel Configuration Error */
 		pr_err();
 	}
-	gpioConfigPinDirection(GPIOC,3,0,3);
 #if 0
 	ADC_AnalogWDGConfTypeDef AnalogWDGConfig;
 	/* Analog watchdog 1 configuration */
@@ -191,17 +190,28 @@ void TIM_Config(void)
 #if 1
 	//TimHandle.Init.Period = ((HAL_RCC_GetPCLK2Freq() / (1099 * 1000)) - 1);
 	//TimHandle.Init.Prescaler = (1099-1);
-	TimHandle.Init.Prescaler = 71;
 	switch (sampleRate) {
 		default:
-		case 0:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/72/400-1; break;		// sample-rate 400Hz
-		case 1:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/72/2000-1; break;	// sample-rate 2kHz
-		case 2:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/72/4000-1; break;	// sample-rate 4kHz
-		case 3:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/72/8000-1; break;	// sample-rate 8kHz
-		case 4:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/72/20000-1; break;	// sample-rate 20kHz
-		case 5:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/72/40000-1; break;	// sample-rate 40kHz
-		case 6:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/72/100000-1; break;	// sample-rate 100kHz
-		case 7:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/72/200000-1; break;	// sample-rate 200kHz
+		case 0:	TimHandle.Init.Prescaler = 71;
+				TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/72/1600-1; break;	// sample-rate 400Hz
+		case 1:	TimHandle.Init.Prescaler = 71;
+				TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/72/8000-1; break;	// sample-rate 2kHz
+		case 2:	TimHandle.Init.Prescaler = 71;
+				TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/72/16000-1; break;	// sample-rate 4kHz
+		case 3:	TimHandle.Init.Prescaler = 71;
+				TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/72/32000-1; break;	// sample-rate 8kHz
+		case 4:	TimHandle.Init.Prescaler = 71;
+				TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/72/80000-1; break;	// sample-rate 20kHz
+		case 5:	TimHandle.Init.Prescaler = 71;
+				TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/72/160000-1; break;	// sample-rate 40kHz
+		case 6:	TimHandle.Init.Prescaler = 0;
+				TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/400000-1; break;		// sample-rate 100kHz
+		case 7:	TimHandle.Init.Prescaler = 0;
+				TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/800000-1; break;		// sample-rate 200kHz
+		case 8:	TimHandle.Init.Prescaler = 0;
+				TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/1600000-1; break;	// sample-rate 400kHz
+		case 9:	TimHandle.Init.Prescaler = 0;
+				TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/4000000-1; break;	// sample-rate 1MHz
 	}
 #else
 	TimHandle.Init.Period = 10000 - 1;
@@ -264,6 +274,7 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef *hadc)
 	GPIO_InitStruct.Pull = GPIO_NOPULL;
 	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
+	gpioConfigPinDirection(GPIOC,3,0,3);
 #if 1
 	static DMA_HandleTypeDef  DmaHandle;
 	/* Configure DMA parameters */
@@ -343,8 +354,7 @@ static void TaskADCInit(void *data)
 	}
 #else
 	/* Start ADC conversion on regular group with transfer by DMA */
-	if (HAL_ADC_Start_DMA(&AdcHandle,
-			(uint32_t *)ADC_samples, ADC_SAMPLES_BUFFSIZE) != HAL_OK) {
+	if (HAL_ADC_Start_DMA(&AdcHandle,(uint32_t *)ADC_samples, ADC_SAMPLES_BUFFSIZE) != HAL_OK) {
 		/* Start Error */
 		pr_err();
 	}
@@ -358,9 +368,9 @@ void checkTrigger(void)
 {
 	uint16_t currentSample, previousSample, index;
 	//check if we have a trigger condition within our working buffer
-	for (index=10;index<ADC_SAMPLES_BUFFSIZE;index++) {
-		currentSample = workingSamples[index];
-		previousSample = workingSamples[index-1];
+	for (index=40;index<ADC_SAMPLES_BUFFSIZE;index++) {
+		currentSample = ADC_samples[index];
+		previousSample = ADC_samples[index-1];
 		switch (triggerMode) {
 			case TRIGGER_WAITING:	// we are waiting for trigger conditions
 				if (index>=SCOPE_SAMPLES_BUFFSIZE) return;
@@ -368,14 +378,14 @@ void checkTrigger(void)
 					case 0:	// rising edge trigger
 						if (currentSample>=triggerLevel && previousSample<triggerLevel) {
 							// we have a rising edge ! Copy samples to buffer and wait for trigger hold off
-							for (uint16_t x=0; x<SCOPE_SAMPLES_BUFFSIZE; x++) samples[x] = workingSamples[index-10+x];
+							for (uint16_t x=0; x<SCOPE_SAMPLES_BUFFSIZE; x++) samples[x] = ADC_samples[index-40+x*4];
 							triggerMode = TRIGGER_HOLDOFF;
 						}
 						break;
 					case 1:	// falling edge trigger
 						if (currentSample<=triggerLevel && previousSample>triggerLevel) {
 							// we have a falling edge ! Copy samples to buffer and wait for trigger hold off
-							for (uint16_t x=0; x<SCOPE_SAMPLES_BUFFSIZE; x++) samples[x] = workingSamples[index-10+x];
+							for (uint16_t x=0; x<SCOPE_SAMPLES_BUFFSIZE; x++) samples[x] = ADC_samples[index-40+x*4];
 							triggerMode = TRIGGER_HOLDOFF;
 						}
 						break;					
@@ -408,6 +418,7 @@ void TaskADC(void *data)
 	if (conversionComplete) {
 		checkTrigger();
 		conversionComplete = 0;
+		HAL_ADC_Start_DMA(&AdcHandle,(uint32_t *)ADC_samples, ADC_SAMPLES_BUFFSIZE);
 	}
 }
 
@@ -454,7 +465,8 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 	pr_err("");
 	gpioOutput(GPIOC,3,!gpioRead(GPIOC,3));
 	// we just copy our samples to another buffer
-	memcpy((void *)workingSamples, (void *)ADC_samples,sizeof(uint16_t)*ADC_SAMPLES_BUFFSIZE);	
+	//memcpy((void *)workingSamples, (void *)ADC_samples,sizeof(uint16_t)*ADC_SAMPLES_BUFFSIZE);
+	HAL_ADC_Stop_DMA(&AdcHandle); 	
 	conversionComplete = 1;
 }
 

@@ -22,7 +22,7 @@
 #define HOURS(x)        ((x)*MINUTES(60))
 
 /* number of element of sampled data */
-#define ADC_SAMPLES_BUFFSIZE    256
+#define ADC_SAMPLES_BUFFSIZE    1024
 #define SCOPE_SAMPLES_BUFFSIZE  128
 /*
  *  Simple table driven parser for a command line interface.
