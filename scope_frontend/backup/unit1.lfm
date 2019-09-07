@@ -94,6 +94,7 @@ object Form1: TForm1
       Width = 152
       AutoSize = False
       ItemHeight = 0
+      ItemIndex = 0
       Items.Strings = (
         '25 ms'
         '5 ms'
@@ -193,7 +194,8 @@ object Form1: TForm1
     Alignment = taRightJustify
     Caption = 'Trigger'
     Color = clBlack
-    Font.Color = clBlue
+    Font.Color = clYellow
+    Font.Style = [fsBold]
     ParentFont = False
     ParentColor = False
     TabOrder = 7

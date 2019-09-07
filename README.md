@@ -17,7 +17,7 @@ capture the samples data
 ## Charlie ##
 * work around code for the issue of sending '\n'
 * pakcet handler
-* common header which can be used commonly among frontend, oninon and STM32
+* common header which can be used commonly among frontend, onion and STM32
 
 ## ##
 
@@ -25,4 +25,3 @@ capture the samples data
 
 * Quick summary
 * Version
-* [Learn Markdown](https://bitbucket.org/tutorials/markdowndemo)

@@ -1,6 +1,6 @@
 CFLAGS=-I.
 
-#PREFIX	=	mipsel-openwrt-linux-
+PREFIX	=	/mnt/Projects/onion/source/staging_dir/toolchain-mipsel_24kc_gcc-7.3.0_musl/bin/mipsel-openwrt-linux-
 CC=$(PREFIX)gcc
 AR=$(PREFIX)ar
 AS=$(PREFIX)as
@@ -10,8 +10,8 @@ OBJDUMP=$(PREFIX)objdump
 
 CFLAGS  = -Wall -Werror
 CFLAGS += -Os
-#CFLAGS += -Wextra
-#CFLAGS += -std=gnu99
+CFLAGS += -Wextra
+CFLAGS += -std=gnu99
 
 EXEC = osc_agent
 

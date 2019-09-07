@@ -11,7 +11,7 @@
         <WindowIndex Value="-1"/>
         <TopLine Value="-1"/>
         <CursorPos X="-1" Y="-1"/>
-        <UsageCount Value="154"/>
+        <UsageCount Value="158"/>
       </Unit0>
       <Unit1>
         <Filename Value="unit1.pas"/>
@@ -23,7 +23,7 @@
         <IsVisibleTab Value="True"/>
         <TopLine Value="293"/>
         <CursorPos X="61" Y="322"/>
-        <UsageCount Value="154"/>
+        <UsageCount Value="158"/>
         <Bookmarks Count="1">
           <Item0 X="40" Y="98"/>
         </Bookmarks>
@@ -51,7 +51,7 @@
         <EditorIndex Value="3"/>
         <TopLine Value="1403"/>
         <CursorPos X="6" Y="18"/>
-        <UsageCount Value="74"/>
+        <UsageCount Value="76"/>
         <Loaded Value="True"/>
       </Unit4>
       <Unit5>
@@ -60,7 +60,7 @@
         <EditorIndex Value="2"/>
         <TopLine Value="388"/>
         <CursorPos X="60" Y="410"/>
-        <UsageCount Value="70"/>
+        <UsageCount Value="72"/>
         <Loaded Value="True"/>
       </Unit5>
       <Unit6>
@@ -69,7 +69,7 @@
         <EditorIndex Value="1"/>
         <TopLine Value="866"/>
         <CursorPos X="27" Y="876"/>
-        <UsageCount Value="41"/>
+        <UsageCount Value="43"/>
         <Loaded Value="True"/>
       </Unit6>
     </Units>

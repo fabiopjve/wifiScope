@@ -264,7 +264,7 @@ begin
     if currentCMD = CMD_READ_DEBUG_DATA then
     begin
       // if we have a debug command, append data to memo, delete string and return
-      memo1.Append(Copy(receiveBuffer,stringIndex,temp2-1));
+      memo1.Append(Copy(receiveBuffer,stringIndex,temp2));
       Delete(receiveBuffer,1,stringIndex+temp2);
       exit;
     end;
@@ -347,7 +347,6 @@ var
    index : integer;
    tmp: string;
 begin
-  //serverIP.Text:=aSocket.LocalAddress;
   tmp := '';
   size := aSocket.Get(rcv,64);
   tmp:= 'Size='+intToStr(size);

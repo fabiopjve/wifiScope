@@ -64,11 +64,11 @@ void error(char *msg) {
           char size - 2 for bytes and 4 for words
           char *buffer - the string we are going to write the result
 */
-void dataToHexString(unsigned int value, char size, char *buffer)
+char *dataToHexString(unsigned int value, char size, char *buffer)
 {
   unsigned int compareValue = 4096;
   char index = 0;
-  if (size!=2 && size !=4) return;
+  if (size!=2 && size !=4) return NULL;
   if (size==2) compareValue = 16;
   while (index<size) {
     if (value>=compareValue) {
@@ -80,6 +80,7 @@ void dataToHexString(unsigned int value, char size, char *buffer)
     buffer++;
     compareValue /= 16;
   }
+  return buffer;
 }
 
 /*
@@ -146,7 +147,7 @@ void sendData(char command)
   unsigned int value = 0;
   unsigned int compareValue = 4096;
   char index = 0;
-  buffer = alloca(64);
+  buffer = alloca(4);
   if (buffer==NULL) {
     printf("sendData error: could not allocate memory\n");
     return;
@@ -173,10 +174,10 @@ void sendData(char command)
 void sendBuffer(void)
 {
   static int counter, offset;
-  char *buffer;
+  char *buffer, *tempBuffer;
   unsigned int value = 0;
   int bufferSize = 64;
-  buffer = alloca(bufferSize);
+  buffer = alloca(bufferSize*4+11);
   if (buffer==NULL) {
     printf("sendData error: could not allocate memory\n");
     return;
@@ -186,18 +187,26 @@ void sendBuffer(void)
     if (offset>30) offset=0;
     counter = 0;
   } else counter++;
-  send(childfd, "WOSC", 4, MSG_DONTWAIT);
-  dataToHexString(bufferSize*4,4,buffer);
-  send(childfd, buffer, 4, MSG_DONTWAIT); 
-  send(childfd, "22", 2, MSG_DONTWAIT);
-  for (int x=0; x<bufferSize; x++) {
+  tempBuffer = buffer;
+  printf("%p\n",buffer);
+  strcpy(buffer,"WOSC");
+  buffer += 4;
+  buffer = dataToHexString(bufferSize*4,4,buffer);
+  *buffer++ = '2';
+  *buffer++ = '2';
+  int x = 0;
+  do {
     float sinRes = sin((3.141592*2/bufferSize)*(x+offset));
     float val = (sinRes+1)*2047;
     printf("Val=%f %i\n",sinRes,(int)val);
-    dataToHexString((int)val,4,buffer);
-    send(childfd, buffer, 4, MSG_DONTWAIT);
-  }
-  send(childfd, "\n", 1, MSG_DONTWAIT);
+    buffer = dataToHexString((int)val,4,buffer);
+    x++;
+  } while (x<bufferSize);
+  *buffer = '\n';
+  buffer++;
+  *buffer = '\0';
+  printf("-> %s\n",tempBuffer);
+  send(childfd, tempBuffer, bufferSize*4+11, MSG_DONTWAIT);
   send(childfd, "WOSC0005DEDebug\n", 16, MSG_DONTWAIT);
 }
 
@@ -359,50 +368,5 @@ int main(int argc, char **argv)
         break;
       }
     }
-  }
-}
-
-//#define FSM_STATE(state) name: jumper = &&name;
-#define FSM_YIELD(state) ({jumper = &&state; return;})
-#define FSM_START() static void *jumper = NULL; if (jumper!=NULL) goto *jumper;
-
-void testFSM(void) 
-{
-  FSM_START();
-  static int counter = 0;
-  
-  state1:
-    printf("state 1\n");
-    FSM_YIELD(state2);
-  state2:
-    printf("state 2\n");
-    counter++;
-    if (counter==2) FSM_YIELD(state3); else FSM_YIELD(state1);
-  state3:
-    printf("state 3\n");
-    FSM_YIELD(state4);
-  state4:
-    counter = 0;
-}
-
-void testFSM2(void) 
-{
-  static int counter = 0, state=0;
-  switch(state) {
-    case 0:
-      printf("State 1\n");
-      state = 1;
-      break;
-    case 1:
-      printf("State 2\n");
-      counter++;
-      if (counter==2) state = 2; else state =0;
-      break;
-    case 2:
-      printf("State 3\n");
-      state = 3;
-      break;
-    case 3:
-      break;
   }
 }

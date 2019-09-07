@@ -421,6 +421,18 @@ begin
           Chart1.BottomAxis.Intervals.NiceSteps:='0.25|0.5|1.0';
           Chart1.BottomAxis.Title.Caption:='microseconds';
         end;
+    8 : begin
+          Chart1.BottomAxis.Range.Max:=295;
+          Chart1.BottomAxis.Range.Min:=-25;
+          Chart1.BottomAxis.Intervals.NiceSteps:='0.25|0.5|1.0';
+          Chart1.BottomAxis.Title.Caption:='microseconds';
+        end;
+    9 : begin
+          Chart1.BottomAxis.Range.Max:=147.5;
+          Chart1.BottomAxis.Range.Min:=-12.5;
+          Chart1.BottomAxis.Intervals.NiceSteps:='0.2|0.5|1.0';
+          Chart1.BottomAxis.Title.Caption:='microseconds';
+        end;
   end;
 end;
 
