@@ -1,5 +1,9 @@
 /* 
- * tcpserver.c - A simple TCP echo server 
+ * tcpserver.c
+ *
+ * This code will listen on the specified TCP port and wait for a connection. Once connected, it
+ * will process oscilloscope commands and send fake data to test the graphic frontend.
+ * 
  * usage: tcpserver <port>
  * Modified from https://www.cs.cmu.edu/afs/cs/academic/class/15213-f99/www/class26/tcpserver.c
  *   by Fabio Pereira
@@ -31,17 +35,17 @@
 #define CMD_READ_TRIGGER_TYPE   0x68
 #define CMD_DEBUG_MESSAGE       0xDE
 
-int parentfd; /* parent socket */
-int childfd; /* child socket */
-int portno; /* port to listen on */
-int clientlen; /* byte size of client's address */
+int parentfd;       /* parent socket */
+int childfd;        /* child socket */
+int portno;         /* port to listen on */
+int clientlen;      /* byte size of client's address */
 struct sockaddr_in serveraddr; /* server's addr */
 struct sockaddr_in clientaddr; /* client addr */
 struct hostent *hostp; /* client host info */
-char buf[BUFSIZE]; /* message buffer */
-char *hostaddrp; /* dotted decimal host addr string */
-int optval; /* flag value for setsockopt */
-int size; /* message byte size */
+char buf[BUFSIZE];  /* message buffer */
+char *hostaddrp;    /* dotted decimal host addr string */
+int optval;         /* flag value for setsockopt */
+int size;           /* message byte size */
 int sampleRate = 17;
 int triggerLevel = 0;
 int triggerMode = 0;
@@ -56,19 +60,22 @@ void error(char *msg) {
 }
 
 /*
-  void dataToHexString(unsigned int value, char *buffer)
+  char *dataToHexString(unsigned int value, char *buffer)
 
   Converts an 8 or 16-bit value into a hexadecimal string
 
   input:  unsigned int value - the word we want to convert to string
           char size - 2 for bytes and 4 for words
           char *buffer - the string we are going to write the result
+
+  returns: a pointer to the end of the string
 */
 char *dataToHexString(unsigned int value, char size, char *buffer)
 {
   unsigned int compareValue = 4096;
   char index = 0;
-  if (size!=2 && size !=4) return NULL;
+  // if size is not 2 or 4, return right away
+  if (size!=2 && size !=4) return buffer;
   if (size==2) compareValue = 16;
   while (index<size) {
     if (value>=compareValue) {
@@ -173,7 +180,7 @@ void sendData(char command)
 */
 void sendBuffer(void)
 {
-  static int counter, offset;
+  static int offset;
   char *buffer, *tempBuffer;
   unsigned int value = 0;
   int bufferSize = 64;
@@ -182,31 +189,32 @@ void sendBuffer(void)
     printf("sendData error: could not allocate memory\n");
     return;
   }
-  if (1) {
-    offset++;
-    if (offset>30) offset=0;
-    counter = 0;
-  } else counter++;
-  tempBuffer = buffer;
-  printf("%p\n",buffer);
+  // we increase the wave offset gradually so we can see some movement on screen!
+  offset++;
+  if (offset>30) offset=0;
+  // now let's start working on the buffer
+  tempBuffer = buffer;  // we keep a copy of the start of the buffer
   strcpy(buffer,"WOSC");
-  buffer += 4;
+  buffer += 4;  // move the string pointer to the next available position
+  // converts the payload size to hexadecimal and write into the buffer
   buffer = dataToHexString(bufferSize*4,4,buffer);
+  // command = 22
   *buffer++ = '2';
   *buffer++ = '2';
+  // now we create a sine wave and populate the buffer
   int x = 0;
   do {
     float sinRes = sin((3.141592*2/bufferSize)*(x+offset));
     float val = (sinRes+1)*2047;
-    printf("Val=%f %i\n",sinRes,(int)val);
+    //printf("Val=%f %i\n",sinRes,(int)val);
     buffer = dataToHexString((int)val,4,buffer);
     x++;
   } while (x<bufferSize);
-  *buffer = '\n';
-  buffer++;
-  *buffer = '\0';
-  printf("-> %s\n",tempBuffer);
-  send(childfd, tempBuffer, bufferSize*4+11, MSG_DONTWAIT);
+  *buffer++ = '\n'; // add a new line to the end of the buffer
+  *buffer = '\0'; // this is needed only because we want to print the string on console
+  printf("-> %s\n",tempBuffer); // print out the string
+  send(childfd, tempBuffer, bufferSize*4+11, MSG_DONTWAIT); // send the string to client
+  // we also send a debug message (just for testing)
   send(childfd, "WOSC0005DEDebug\n", 16, MSG_DONTWAIT);
 }
 
