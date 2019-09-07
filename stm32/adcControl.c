@@ -165,6 +165,7 @@ static void ADC_Config(void)
 		pr_err();
 	}
 #if 0
+	// this is the analog watchdog configuration
 	ADC_AnalogWDGConfTypeDef AnalogWDGConfig;
 	/* Analog watchdog 1 configuration */
 	AnalogWDGConfig.WatchdogNumber = ADC_ANALOGWATCHDOG_1;
@@ -181,15 +182,9 @@ static void ADC_Config(void)
 void TIM_Config(void)
 {
 	TIM_MasterConfigTypeDef sMasterConfig;
-
 	/* Time Base configuration */
 	TimHandle.Instance = TIM1;
-
-	/* Configure timer frequency */
-	/* This should be changed according to the sampling rate setting by frontend */
-#if 1
-	//TimHandle.Init.Period = ((HAL_RCC_GetPCLK2Freq() / (1099 * 1000)) - 1);
-	//TimHandle.Init.Prescaler = (1099-1);
+	/* Configure timer frequency according to the setting at sampleRate */
 	switch (sampleRate) {
 		default:
 		case 0:	TimHandle.Init.Prescaler = 71;
@@ -213,10 +208,6 @@ void TIM_Config(void)
 		case 9:	TimHandle.Init.Prescaler = 0;
 				TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/4000000-1; break;	// sample-rate 1MHz
 	}
-#else
-	TimHandle.Init.Period = 10000 - 1;
-	TimHandle.Init.Prescaler = (uint32_t)(SystemCoreClock / 10000) - 1;
-#endif
 	TimHandle.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
 	TimHandle.Init.CounterMode = TIM_COUNTERMODE_UP;
 	TimHandle.Init.RepetitionCounter = 0x0;
@@ -363,7 +354,11 @@ static void TaskADCInit(void *data)
 #else
 static void TaskADCInit(void *data) {}
 #endif
-
+/*
+ *	checkTrigger()
+ *	Checks the sample buffer looking for a trigger condition, if a condition is found, copies
+ *  samples to output buffer (samples[])
+*/
 void checkTrigger(void) 
 {
 	uint16_t currentSample, previousSample, index;
@@ -469,92 +464,6 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 	HAL_ADC_Stop_DMA(&AdcHandle); 	
 	conversionComplete = 1;
 }
-
-#if 0
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
-{
-#if 1
-	static uint16_t arrayIndex, latestIndex;
-	static uint16_t latestSamples[8];
-	uint16_t currentReading, tempIndex;
-	pr_err("");
-	currentReading = HAL_ADC_GetValue(hadc);
-	switch (triggerMode) {
-		case TRIGGER_WAITING:	// we are waiting for trigger conditions
-			switch (triggerType) {
-				case 0:	// rising edge trigger
-					if (	currentReading>=triggerLevel && 
-							PREV_SAMPL(latestSamples,latestIndex)<triggerLevel) {
-						// we have a rising edge ! Copy last four samples to buffer and go to triggered state
-						tempIndex = (latestIndex - 6) & 0x07;
-						arrayIndex = 0;
-						for (uint16_t x=0;x<6;x++) {
-							ADC_samples[arrayIndex++] = latestSamples[tempIndex++];
-							tempIndex &= 0x07;
-						}
-						triggerMode = TRIGGER_FIRED;
-					}
-					break;
-				case 1:	// falling edge trigger
-					if (	currentReading<=triggerLevel && 
-							PREV_SAMPL(latestSamples,latestIndex)>triggerLevel) {
-						// we have a falling edge ! Copy last four samples to buffer and go to triggered state
-						tempIndex = (latestIndex - 6) & 0x07;
-						arrayIndex = 0;
-						for (uint16_t x=0;x<6;x++) {
-							ADC_samples[arrayIndex++] = latestSamples[tempIndex++];
-							tempIndex &= 0x07;
-						}
-						triggerMode = TRIGGER_FIRED;
-					}
-					break;					
-			}
-			break;			
-		case TRIGGER_FIRED:		// we are triggered, store sample into sample buffer
-			ADC_samples[arrayIndex++] = currentReading;
-			if (arrayIndex>=ADC_SAMPLES_BUFFSIZE) {
-				triggerMode = TRIGGER_HOLDOFF;
-				memcpy(	(void *)samples, (void *)ADC_samples,
-						sizeof(uint16_t)*ADC_SAMPLES_BUFFSIZE);				
-			}
-			break;
-		case TRIGGER_HOLDOFF:	// this is post-trigger event, wait for signal to go on opposite direction of trigger
-			switch (triggerType) {
-				case 0:	// rising edge trigger, wait for signal to go below trigger level
-					if (currentReading<triggerLevel) triggerMode = TRIGGER_WAITING;
-					break;
-				case 1:	// falling edge trigger, wait for signal to go above trigger level
-					if (currentReading>triggerLevel) triggerMode = TRIGGER_WAITING;
-					break;					
-			}
-			break;		
-	}
-	latestSamples[latestIndex++] = currentReading;
-	latestIndex &= 0x07;
-	gpioOutput(GPIOC,3,!gpioRead(GPIOC,3));
-#else
-	pr_err("");
-	if (AWD_event) {
-		// copy sampled data to the another buffer to be used to send to frontend
-		memcpy((void *)samples, (void *)ADC_samples,
-				sizeof(uint16_t)*ADC_SAMPLES_BUFFSIZE);
-		AWD_event = 0;
-		pr_err("memcpy!!\n");
-
-#ifdef ENABLE_ADC_DUMP
-		//hex_dump(samples, 512);
-		for (int i=0;i<ADC_SAMPLES_BUFFSIZE;i++) {
-			printf("%03X ", samples[i]);
-			if ((i+1)%16 == 0)
-				printf("\n");
-		}
-#endif
-	}
-	/* enable Analog Watchdog again */
-	__HAL_ADC_ENABLE_IT(hadc, ADC_IT_AWD1);
-#endif
-}
-#endif
 
 /**
   * @brief  Analog watchdog callback in non blocking mode.
