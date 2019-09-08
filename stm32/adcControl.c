@@ -27,6 +27,7 @@ volatile uint16_t ADC_samples[ADC_SAMPLES_BUFFSIZE];
 volatile uint16_t samples[SCOPE_SAMPLES_BUFFSIZE];
 static volatile int AWD_event = 0;
 static volatile uint8_t conversionComplete;
+extern char transmissionInProgress;
 volatile uint16_t triggerLevel;
 volatile uint16_t triggerType;
 volatile uint16_t sampleRate;
@@ -185,28 +186,19 @@ void TIM_Config(void)
 	/* Time Base configuration */
 	TimHandle.Instance = TIM1;
 	/* Configure timer frequency according to the setting at sampleRate */
+	TimHandle.Init.Prescaler = 0;
 	switch (sampleRate) {
 		default:
-		case 0:	TimHandle.Init.Prescaler = 71;
-				TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/72/1600-1; break;	// sample-rate 400Hz
-		case 1:	TimHandle.Init.Prescaler = 71;
-				TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/72/8000-1; break;	// sample-rate 2kHz
-		case 2:	TimHandle.Init.Prescaler = 71;
-				TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/72/16000-1; break;	// sample-rate 4kHz
-		case 3:	TimHandle.Init.Prescaler = 71;
-				TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/72/32000-1; break;	// sample-rate 8kHz
-		case 4:	TimHandle.Init.Prescaler = 71;
-				TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/72/80000-1; break;	// sample-rate 20kHz
-		case 5:	TimHandle.Init.Prescaler = 71;
-				TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/72/160000-1; break;	// sample-rate 40kHz
-		case 6:	TimHandle.Init.Prescaler = 0;
-				TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/400000-1; break;		// sample-rate 100kHz
-		case 7:	TimHandle.Init.Prescaler = 0;
-				TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/800000-1; break;		// sample-rate 200kHz
-		case 8:	TimHandle.Init.Prescaler = 0;
-				TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/1600000-1; break;	// sample-rate 400kHz
-		case 9:	TimHandle.Init.Prescaler = 0;
-				TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/4000000-1; break;	// sample-rate 1MHz
+		case 0:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/1600-1; break;		// sample-rate 400Hz
+		case 1:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/8000-1; break;		// sample-rate 2kHz
+		case 2:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/16000-1; break;		// sample-rate 4kHz
+		case 3:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/40000-1; break;		// sample-rate 10kHz
+		case 4:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/80000-1; break;		// sample-rate 20kHz
+		case 5:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/160000-1; break;		// sample-rate 40kHz
+		case 6:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/400000-1; break;		// sample-rate 100kHz
+		case 7:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/800000-1; break;		// sample-rate 200kHz
+		case 8:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/1600000-1; break;	// sample-rate 400kHz
+		case 9:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/4000000-1; break;	// sample-rate 1MHz
 	}
 	TimHandle.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
 	TimHandle.Init.CounterMode = TIM_COUNTERMODE_UP;
@@ -372,21 +364,29 @@ void checkTrigger(void)
 				switch (triggerType) {
 					case 0:	// rising edge trigger
 						if (currentSample>=triggerLevel && previousSample<triggerLevel) {
-							// we have a rising edge ! Copy samples to buffer and wait for trigger hold off
-							for (uint16_t x=0; x<SCOPE_SAMPLES_BUFFSIZE; x++) samples[x] = ADC_samples[index-40+x*4];
+							// we have a rising edge! Copy samples to buffer and wait for trigger hold off
+							for (uint16_t x=0; x<SCOPE_SAMPLES_BUFFSIZE; x++) {
+								uint16_t idx = index-40+x*4;
+								if (idx<ADC_SAMPLES_BUFFSIZE) samples[x] = ADC_samples[idx];
+								else samples[x] = 0;
+							} 
 							triggerMode = TRIGGER_HOLDOFF;
 						}
 						break;
 					case 1:	// falling edge trigger
 						if (currentSample<=triggerLevel && previousSample>triggerLevel) {
-							// we have a falling edge ! Copy samples to buffer and wait for trigger hold off
-							for (uint16_t x=0; x<SCOPE_SAMPLES_BUFFSIZE; x++) samples[x] = ADC_samples[index-40+x*4];
+							// we have a falling edge! Copy samples to buffer and wait for trigger hold off
+							for (uint16_t x=0; x<SCOPE_SAMPLES_BUFFSIZE; x++) {
+								uint16_t idx = index-40+x*4;
+								if (idx<ADC_SAMPLES_BUFFSIZE) samples[x] = ADC_samples[idx];
+								else samples[x] = 0;
+							}
 							triggerMode = TRIGGER_HOLDOFF;
 						}
 						break;					
 				}
 				break;			
-			case TRIGGER_HOLDOFF:	// this is post-trigger event, wait for signal to go on opposite direction of trigger
+			case TRIGGER_HOLDOFF:	// this is post-trigger event, wait for the signal to go on opposite direction of trigger
 				switch (triggerType) {
 					case 0:	// rising edge trigger, wait for signal to go below trigger level
 						if (currentSample<triggerLevel) {
@@ -411,9 +411,11 @@ void checkTrigger(void)
 void TaskADC(void *data)
 {
 	if (conversionComplete) {
-		checkTrigger();
-		conversionComplete = 0;
-		HAL_ADC_Start_DMA(&AdcHandle,(uint32_t *)ADC_samples, ADC_SAMPLES_BUFFSIZE);
+		if (!transmissionInProgress) {
+			checkTrigger();
+			conversionComplete = 0;
+			HAL_ADC_Start_DMA(&AdcHandle,(uint32_t *)ADC_samples, ADC_SAMPLES_BUFFSIZE);
+		}
 	}
 }
 
