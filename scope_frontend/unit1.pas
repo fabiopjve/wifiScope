@@ -313,7 +313,7 @@ begin
           0 : frequency := 1/((freqEnd-freqStart)*0.0025*2);
           1 : frequency := 1/((freqEnd-freqStart)*0.0005*2);
           2 : frequency := 1/((freqEnd-freqStart)*0.00025*2);
-          3 : frequency := 1/((freqEnd-freqStart)*0.000125*2);
+          3 : frequency := 1/((freqEnd-freqStart)*0.0001*2);
           4 : frequency := 1/((freqEnd-freqStart)*0.00005*2);
           5 : frequency := 1/((freqEnd-freqStart)*0.000025*2);
           6 : frequency := 1/((freqEnd-freqStart)*0.00001*2);
@@ -391,44 +391,51 @@ begin
           Chart1.BottomAxis.Title.Caption:='milliseconds';
         end;
     3 : begin
-          Chart1.BottomAxis.Range.Max:=14.75;
-          Chart1.BottomAxis.Range.Min:=-1.25;
+          // 1ms / division
+          Chart1.BottomAxis.Range.Max:=11.8;
+          Chart1.BottomAxis.Range.Min:=-1;
           Chart1.BottomAxis.Intervals.NiceSteps:='0.25|0.5|1.0';
           Chart1.BottomAxis.Title.Caption:='milliseconds';
         end;
     4 : begin
+          // 500us / division
           Chart1.BottomAxis.Range.Max:=5900;
           Chart1.BottomAxis.Range.Min:=-500;
           Chart1.BottomAxis.Intervals.NiceSteps:='0.2|0.5|1.0';
           Chart1.BottomAxis.Title.Caption:='microseconds';
         end;
     5 : begin
+          // 250us / division
           Chart1.BottomAxis.Range.Max:=2950;
           Chart1.BottomAxis.Range.Min:=-250;
           Chart1.BottomAxis.Intervals.NiceSteps:='0.25|0.5|1.0';
           Chart1.BottomAxis.Title.Caption:='microseconds';
         end;
     6 : begin
-          Chart1.BottomAxis.Range.Max:=1475;
-          Chart1.BottomAxis.Range.Min:=-125;
+          // 100us / division
+          Chart1.BottomAxis.Range.Max:=1180;
+          Chart1.BottomAxis.Range.Min:=-100;
           Chart1.BottomAxis.Intervals.NiceSteps:='0.2|0.5|1.0';
           Chart1.BottomAxis.Title.Caption:='microseconds';
         end;
     7 : begin
+          // 50 us / division
           Chart1.BottomAxis.Range.Max:=590;
           Chart1.BottomAxis.Range.Min:=-50;
           Chart1.BottomAxis.Intervals.NiceSteps:='0.25|0.5|1.0';
           Chart1.BottomAxis.Title.Caption:='microseconds';
         end;
     8 : begin
+          // 25us / division
           Chart1.BottomAxis.Range.Max:=295;
           Chart1.BottomAxis.Range.Min:=-25;
           Chart1.BottomAxis.Intervals.NiceSteps:='0.25|0.5|1.0';
           Chart1.BottomAxis.Title.Caption:='microseconds';
         end;
     9 : begin
-          Chart1.BottomAxis.Range.Max:=147.5;
-          Chart1.BottomAxis.Range.Min:=-12.5;
+          // 10us / division
+          Chart1.BottomAxis.Range.Max:=118;
+          Chart1.BottomAxis.Range.Min:=-10;
           Chart1.BottomAxis.Intervals.NiceSteps:='0.2|0.5|1.0';
           Chart1.BottomAxis.Title.Caption:='microseconds';
         end;
