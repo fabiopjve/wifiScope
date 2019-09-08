@@ -215,7 +215,7 @@ void sendBuffer(void)
   printf("-> %s\n",tempBuffer); // print out the string
   send(childfd, tempBuffer, bufferSize*4+11, MSG_DONTWAIT); // send the string to client
   // we also send a debug message (just for testing)
-  send(childfd, "WOSC0005DEDebug\n", 16, MSG_DONTWAIT);
+  //send(childfd, "WOSC0005DEDebug\n", 16, MSG_DONTWAIT);
 }
 
 /*
