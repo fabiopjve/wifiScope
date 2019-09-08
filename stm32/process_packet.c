@@ -52,6 +52,7 @@ extern volatile uint16_t ADC_samples[ADC_SAMPLES_BUFFSIZE];
 extern volatile uint16_t triggerLevel;
 extern volatile uint16_t triggerType;
 extern volatile uint16_t sampleRate;
+volatile char transmissionInProgress = 0;
 
 #if 1
 static void send_log(char *fmt, ...)
@@ -139,19 +140,22 @@ long int getDataFromString(char *buf, char size)
 }
 
 /*
-  void dataToHexString(unsigned int value, char *buffer)
+  char *dataToHexString(unsigned int value, char *buffer)
 
   Converts an 8 or 16-bit value into a hexadecimal string
 
   input:  unsigned int value - the word we want to convert to string
           char size - 2 for bytes and 4 for words
           char *buffer - the string we are going to write the result
+
+  returns: a pointer to the end of the string
 */
-void dataToHexString(unsigned int value, char size, char *buffer)
+char *dataToHexString(unsigned int value, char size, char *buffer)
 {
   unsigned int compareValue = 4096;
   char index = 0;
-  if (size!=2 && size !=4) return;
+  // if size is not 2 or 4, return right away
+  if (size!=2 && size !=4) return buffer;
   if (size==2) compareValue = 16;
   while (index<size) {
     if (value>=compareValue) {
@@ -163,42 +167,36 @@ void dataToHexString(unsigned int value, char size, char *buffer)
     buffer++;
     compareValue /= 16;
   }
+  return buffer;
 }
 
 void send_sample_buff(char *buff, int len)
 {
-	char *buffer;
-	//unsigned int value = 0;
+	char *buffer, *tempBuffer;
 	int bufferSize = SCOPE_SAMPLES_BUFFSIZE;
-
-	buffer = alloca(bufferSize);
-	if (buffer==NULL) {
-		printf("sendData error: could not allocate memory\n");
-		return;
-	}
-
-	send(SYNC_STR, 4);
-	dataToHexString(bufferSize*4,4,buffer);
-	send(buffer, 4);
-	send("22", 2);
-
+	buffer = alloca(bufferSize*4+11);
+	if (buffer==NULL) return;
+	tempBuffer = buffer;  // we keep a copy of the start of the buffer
+	strcpy(buffer,SYNC_STR);
+	buffer += 4;  // move the string pointer to the next available position	
+	buffer = dataToHexString(bufferSize*4,4,buffer);
+	// command = 22
+	*buffer++ = '2';
+	*buffer++ = '2';
+	// send the sample buffer
+	transmissionInProgress = 1;	// signal we are using the buffer now
 	for (int x=0; x<bufferSize; x++) {
 #ifdef FAKE_WAVEFORM
 		float sinRes = sin((3.141592*2/bufferSize)*(x+offset));
 		float val = (sinRes+1)*2047;
-		//printf("%f (%04i/%04x)\r\n",sinRes,(int)val, (int)val);
-		dataToHexString((int)val,4,buffer);
+		buffer = dataToHexString((int)val,4,buffer);
 #else
-		dataToHexString((int)samples[x],4,buffer);
-		//dataToHexString((int)ADC_samples[x],4,buffer);
+		buffer = dataToHexString((int)samples[x],4,buffer);
 #endif
-		send(buffer, 4);
 	}
-
-	send(EOP_STR, 1);
-
-	//send("WOSC0005deDebug\n", 16);
-	//send_log("Thanks!");
+	transmissionInProgress = 0;	// sample buffer is free for use again
+	*buffer++ = EOP_STR[0]; // add end of packet
+	send(tempBuffer,bufferSize*4+11);
 }
 
 void testfunc(char *buff, int len)
