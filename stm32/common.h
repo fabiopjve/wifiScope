@@ -21,7 +21,7 @@
 #define MINUTES(x)      ((x)*SECONDS(60))
 #define HOURS(x)        ((x)*MINUTES(60))
 
-/* number of element of sampled data */
+/* number of elements of sampled data */
 #define ADC_SAMPLES_BUFFSIZE    1024
 #define SCOPE_SAMPLES_BUFFSIZE  128
 /*

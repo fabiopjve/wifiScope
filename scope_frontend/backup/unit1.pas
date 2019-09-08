@@ -264,7 +264,7 @@ begin
     if currentCMD = CMD_READ_DEBUG_DATA then
     begin
       // if we have a debug command, append data to memo, delete string and return
-      memo1.Append(Copy(receiveBuffer,stringIndex,temp2-1));
+      memo1.Append(Copy(receiveBuffer,stringIndex,temp2));
       Delete(receiveBuffer,1,stringIndex+temp2);
       exit;
     end;
@@ -347,7 +347,6 @@ var
    index : integer;
    tmp: string;
 begin
-  //serverIP.Text:=aSocket.LocalAddress;
   tmp := '';
   size := aSocket.Get(rcv,64);
   tmp:= 'Size='+intToStr(size);
@@ -392,44 +391,51 @@ begin
           Chart1.BottomAxis.Title.Caption:='milliseconds';
         end;
     3 : begin
-          Chart1.BottomAxis.Range.Max:=14.75;
-          Chart1.BottomAxis.Range.Min:=-1.25;
+          // 1ms / division
+          Chart1.BottomAxis.Range.Max:=11.8;
+          Chart1.BottomAxis.Range.Min:=-1;
           Chart1.BottomAxis.Intervals.NiceSteps:='0.25|0.5|1.0';
           Chart1.BottomAxis.Title.Caption:='milliseconds';
         end;
     4 : begin
+          // 500us / division
           Chart1.BottomAxis.Range.Max:=5900;
           Chart1.BottomAxis.Range.Min:=-500;
           Chart1.BottomAxis.Intervals.NiceSteps:='0.2|0.5|1.0';
           Chart1.BottomAxis.Title.Caption:='microseconds';
         end;
     5 : begin
+          // 250us / division
           Chart1.BottomAxis.Range.Max:=2950;
           Chart1.BottomAxis.Range.Min:=-250;
           Chart1.BottomAxis.Intervals.NiceSteps:='0.25|0.5|1.0';
           Chart1.BottomAxis.Title.Caption:='microseconds';
         end;
     6 : begin
-          Chart1.BottomAxis.Range.Max:=1475;
-          Chart1.BottomAxis.Range.Min:=-125;
+          // 100us / division
+          Chart1.BottomAxis.Range.Max:=1180;
+          Chart1.BottomAxis.Range.Min:=-100;
           Chart1.BottomAxis.Intervals.NiceSteps:='0.2|0.5|1.0';
           Chart1.BottomAxis.Title.Caption:='microseconds';
         end;
     7 : begin
+          // 50 us / division
           Chart1.BottomAxis.Range.Max:=590;
           Chart1.BottomAxis.Range.Min:=-50;
           Chart1.BottomAxis.Intervals.NiceSteps:='0.25|0.5|1.0';
           Chart1.BottomAxis.Title.Caption:='microseconds';
         end;
     8 : begin
+          // 25us / division
           Chart1.BottomAxis.Range.Max:=295;
           Chart1.BottomAxis.Range.Min:=-25;
           Chart1.BottomAxis.Intervals.NiceSteps:='0.25|0.5|1.0';
           Chart1.BottomAxis.Title.Caption:='microseconds';
         end;
     9 : begin
-          Chart1.BottomAxis.Range.Max:=147.5;
-          Chart1.BottomAxis.Range.Min:=-12.5;
+          // 10us / division
+          Chart1.BottomAxis.Range.Max:=118;
+          Chart1.BottomAxis.Range.Min:=-10;
           Chart1.BottomAxis.Intervals.NiceSteps:='0.2|0.5|1.0';
           Chart1.BottomAxis.Title.Caption:='microseconds';
         end;
