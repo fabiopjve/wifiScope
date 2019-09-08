@@ -174,9 +174,9 @@ void sendData(char command)
 }
 
 /*
-  void sendData(char command)
+  void sendBuffer(void)
 
-  Sends all samples on TCP connection
+  Sends all samples through TCP connection
 */
 void sendBuffer(void)
 {
