@@ -25,7 +25,6 @@ TIM_HandleTypeDef    TimHandle;
 /* Variable containing ADC conversions results */
 volatile uint16_t ADC_samples[ADC_SAMPLES_BUFFSIZE];
 volatile uint16_t samples[SCOPE_SAMPLES_BUFFSIZE];
-static volatile int AWD_event = 0;
 static volatile uint8_t conversionComplete;
 extern char transmissionInProgress;
 volatile uint16_t triggerLevel;
@@ -165,18 +164,6 @@ static void ADC_Config(void)
 		/* Channel Configuration Error */
 		pr_err();
 	}
-#if 0
-	// this is the analog watchdog configuration
-	ADC_AnalogWDGConfTypeDef AnalogWDGConfig;
-	/* Analog watchdog 1 configuration */
-	AnalogWDGConfig.WatchdogNumber = ADC_ANALOGWATCHDOG_1;
-	AnalogWDGConfig.WatchdogMode = ADC_ANALOGWATCHDOG_ALL_REG;
-	AnalogWDGConfig.Channel = ADC_CHANNEL_1;
-	AnalogWDGConfig.ITMode = ENABLE;
-	AnalogWDGConfig.HighThreshold = (RANGE_12BITS * 6/8);
-	//AnalogWDGConfig.LowThreshold = (RANGE_12BITS * 2/8);
-	HAL_ADC_AnalogWDGConfig(&AdcHandle, &AnalogWDGConfig);
-#endif
 }
 
 #ifndef ENABLE_SW_TRG
@@ -465,37 +452,6 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 	//memcpy((void *)workingSamples, (void *)ADC_samples,sizeof(uint16_t)*ADC_SAMPLES_BUFFSIZE);
 	HAL_ADC_Stop_DMA(&AdcHandle); 	
 	conversionComplete = 1;
-}
-
-/**
-  * @brief  Analog watchdog callback in non blocking mode.
-  * @note:  In case of several analog watchdog enabled, if needed to know
-            which one triggered and on which ADCx, check Analog Watchdog flag
-            ADC_FLAG_AWD1/2/3 into HAL_ADC_LevelOutOfWindowCallback() function.
-            For example:"if (__HAL_ADC_GET_FLAG(hadc1, ADC_FLAG_AWD1) != RESET)"
-  * @param  hadc: ADC handle
-  * @retval None
-  */
-void HAL_ADC_LevelOutOfWindowCallback(ADC_HandleTypeDef* hadc)
-{
-	/* Set variable to report analog watchdog out of window status to main program. */
-	pr_err("");
-
-	/* disable Analog Watchdog temporarily to save captured samples */
-	__HAL_ADC_DISABLE_IT(hadc, ADC_IT_AWD1);
-
-	AWD_event = 1;
-
-#if 0
-	if (HAL_ADC_Stop_DMA(hadc) != HAL_OK) {
-		pr_err();
-	}
-
-	if (HAL_ADC_Start_DMA(&hadc,
-			(uint32_t *)ADC_samples, ADC_SAMPLES_BUFFSIZE) != HAL_OK) {
-		pr_err();
-	}
-#endif
 }
 
 /**
