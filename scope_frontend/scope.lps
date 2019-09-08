@@ -11,7 +11,7 @@
         <WindowIndex Value="-1"/>
         <TopLine Value="-1"/>
         <CursorPos X="-1" Y="-1"/>
-        <UsageCount Value="159"/>
+        <UsageCount Value="194"/>
       </Unit0>
       <Unit1>
         <Filename Value="unit1.pas"/>
@@ -21,9 +21,9 @@
         <ResourceBaseClass Value="Form"/>
         <UnitName Value="Unit1"/>
         <IsVisibleTab Value="True"/>
-        <TopLine Value="389"/>
-        <CursorPos X="42" Y="396"/>
-        <UsageCount Value="159"/>
+        <TopLine Value="370"/>
+        <CursorPos X="30" Y="388"/>
+        <UsageCount Value="194"/>
         <Bookmarks Count="1">
           <Item0 X="40" Y="98"/>
         </Bookmarks>
@@ -36,14 +36,14 @@
         <EditorIndex Value="-1"/>
         <TopLine Value="454"/>
         <CursorPos Y="469"/>
-        <UsageCount Value="10"/>
+        <UsageCount Value="6"/>
       </Unit2>
       <Unit3>
         <Filename Value="../../LazarusComPort/TLazSerial/test/main.pas"/>
         <UnitName Value="Main"/>
         <EditorIndex Value="-1"/>
         <CursorPos X="32" Y="354"/>
-        <UsageCount Value="9"/>
+        <UsageCount Value="5"/>
       </Unit3>
       <Unit4>
         <Filename Value="/usr/share/lazarus/1.8.2/components/tachart/tagraph.pas"/>
@@ -51,7 +51,7 @@
         <EditorIndex Value="3"/>
         <TopLine Value="1403"/>
         <CursorPos X="6" Y="18"/>
-        <UsageCount Value="77"/>
+        <UsageCount Value="94"/>
         <Loaded Value="True"/>
       </Unit4>
       <Unit5>
@@ -60,7 +60,7 @@
         <EditorIndex Value="2"/>
         <TopLine Value="388"/>
         <CursorPos X="60" Y="410"/>
-        <UsageCount Value="73"/>
+        <UsageCount Value="90"/>
         <Loaded Value="True"/>
       </Unit5>
       <Unit6>
@@ -69,7 +69,7 @@
         <EditorIndex Value="1"/>
         <TopLine Value="866"/>
         <CursorPos X="27" Y="876"/>
-        <UsageCount Value="44"/>
+        <UsageCount Value="61"/>
         <Loaded Value="True"/>
       </Unit6>
     </Units>

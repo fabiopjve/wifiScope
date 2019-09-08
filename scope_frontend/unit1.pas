@@ -373,18 +373,21 @@ begin
   numSamples := max;
   case count of
     0 : begin
+          // 25ms / division
           Chart1.BottomAxis.Range.Max:=295;
           Chart1.BottomAxis.Range.Min:=-25;
           Chart1.BottomAxis.Intervals.NiceSteps:='0.25|0.5|1.0';
           Chart1.BottomAxis.Title.Caption:='milliseconds';
         end;
     1 : begin
+          // 5ms / division
           Chart1.BottomAxis.Range.Max:=59;
           Chart1.BottomAxis.Range.Min:=-5;
           Chart1.BottomAxis.Intervals.NiceSteps:='0.2|0.5|1.0';
           Chart1.BottomAxis.Title.Caption:='milliseconds';
         end;
     2 : begin
+          // 2.5ms / division
           Chart1.BottomAxis.Range.Max:=29.5;
           Chart1.BottomAxis.Range.Min:=-2.5;
           Chart1.BottomAxis.Intervals.NiceSteps:='0.25|0.5|1.0';

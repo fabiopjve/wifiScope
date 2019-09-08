@@ -21,8 +21,8 @@
         <ResourceBaseClass Value="Form"/>
         <UnitName Value="Unit1"/>
         <IsVisibleTab Value="True"/>
-        <TopLine Value="401"/>
-        <CursorPos X="44" Y="414"/>
+        <TopLine Value="389"/>
+        <CursorPos X="42" Y="396"/>
         <UsageCount Value="159"/>
         <Bookmarks Count="1">
           <Item0 X="40" Y="98"/>

@@ -313,7 +313,7 @@ begin
           0 : frequency := 1/((freqEnd-freqStart)*0.0025*2);
           1 : frequency := 1/((freqEnd-freqStart)*0.0005*2);
           2 : frequency := 1/((freqEnd-freqStart)*0.00025*2);
-          3 : frequency := 1/((freqEnd-freqStart)*0.000125*2);
+          3 : frequency := 1/((freqEnd-freqStart)*0.0001*2);
           4 : frequency := 1/((freqEnd-freqStart)*0.00005*2);
           5 : frequency := 1/((freqEnd-freqStart)*0.000025*2);
           6 : frequency := 1/((freqEnd-freqStart)*0.00001*2);
@@ -385,6 +385,7 @@ begin
           Chart1.BottomAxis.Title.Caption:='milliseconds';
         end;
     2 : begin
+          // 2.5ms / division
           Chart1.BottomAxis.Range.Max:=29.5;
           Chart1.BottomAxis.Range.Min:=-2.5;
           Chart1.BottomAxis.Intervals.NiceSteps:='0.25|0.5|1.0';
