@@ -397,12 +397,10 @@ void checkTrigger(void)
 
 void TaskADC(void *data)
 {
-	if (conversionComplete) {
-		if (!transmissionInProgress) {
-			checkTrigger();
-			conversionComplete = 0;
-			HAL_ADC_Start_DMA(&AdcHandle,(uint32_t *)ADC_samples, ADC_SAMPLES_BUFFSIZE);
-		}
+	if (conversionComplete && !transmissionInProgress) {
+		checkTrigger();
+		conversionComplete = 0;
+		HAL_ADC_Start_DMA(&AdcHandle,(uint32_t *)ADC_samples, ADC_SAMPLES_BUFFSIZE);
 	}
 }
 
