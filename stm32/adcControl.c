@@ -176,16 +176,26 @@ void TIM_Config(void)
 	TimHandle.Init.Prescaler = 0;
 	switch (sampleRate) {
 		default:
-		case 0:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/1600-1; break;		// sample-rate 400Hz
-		case 1:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/8000-1; break;		// sample-rate 2kHz
-		case 2:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/16000-1; break;		// sample-rate 4kHz
-		case 3:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/40000-1; break;		// sample-rate 10kHz
-		case 4:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/80000-1; break;		// sample-rate 20kHz
-		case 5:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/160000-1; break;		// sample-rate 40kHz
-		case 6:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/400000-1; break;		// sample-rate 100kHz
-		case 7:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/800000-1; break;		// sample-rate 200kHz
-		case 8:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/1600000-1; break;	// sample-rate 400kHz
-		case 9:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/4000000-1; break;	// sample-rate 1MHz
+		// sample-rate 400Hz
+		case 0:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/(400*ADC_OVERSAMPLING)-1; break;
+		// sample-rate 2kHz
+		case 1:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/(2000*ADC_OVERSAMPLING)-1; break;
+		// sample-rate 4kHz		
+		case 2:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/(4000*ADC_OVERSAMPLING)-1; break;
+		// sample-rate 10kHz
+		case 3:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/(10000*ADC_OVERSAMPLING)-1; break;
+		// sample-rate 20kHz		
+		case 4:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/(20000*ADC_OVERSAMPLING)-1; break;
+		// sample-rate 40kHz		
+		case 5:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/(40000*ADC_OVERSAMPLING)-1; break;
+		// sample-rate 100kHz
+		case 6:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/(100000*ADC_OVERSAMPLING)-1; break;
+		// sample-rate 200kHz
+		case 7:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/(200000*ADC_OVERSAMPLING)-1; break;
+		// sample-rate 400kHz		
+		case 8:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/(400000*ADC_OVERSAMPLING)-1; break;
+		// sample-rate 1MHz
+		case 9:	TimHandle.Init.Period = HAL_RCC_GetPCLK2Freq()/(1000000*ADC_OVERSAMPLING)-1; break;
 	}
 	TimHandle.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
 	TimHandle.Init.CounterMode = TIM_COUNTERMODE_UP;
@@ -342,7 +352,7 @@ void checkTrigger(void)
 {
 	uint16_t currentSample, previousSample, index;
 	//check if we have a trigger condition within our working buffer
-	for (index=40;index<ADC_SAMPLES_BUFFSIZE;index++) {
+	for (index=10*ADC_OVERSAMPLING;index<ADC_SAMPLES_BUFFSIZE;index++) {
 		currentSample = ADC_samples[index];
 		previousSample = ADC_samples[index-1];
 		switch (triggerMode) {
@@ -353,7 +363,7 @@ void checkTrigger(void)
 						if (currentSample>=triggerLevel && previousSample<triggerLevel) {
 							// we have a rising edge! Copy samples to buffer and wait for trigger hold off
 							for (uint16_t x=0; x<SCOPE_SAMPLES_BUFFSIZE; x++) {
-								uint16_t idx = index-40+x*4;
+								uint16_t idx = index-(10*ADC_OVERSAMPLING)+x*ADC_OVERSAMPLING;
 								if (idx<ADC_SAMPLES_BUFFSIZE) samples[x] = ADC_samples[idx];
 								else samples[x] = 0;
 							} 
@@ -364,7 +374,7 @@ void checkTrigger(void)
 						if (currentSample<=triggerLevel && previousSample>triggerLevel) {
 							// we have a falling edge! Copy samples to buffer and wait for trigger hold off
 							for (uint16_t x=0; x<SCOPE_SAMPLES_BUFFSIZE; x++) {
-								uint16_t idx = index-40+x*4;
+								uint16_t idx = index-(10*ADC_OVERSAMPLING)+x*ADC_OVERSAMPLING;
 								if (idx<ADC_SAMPLES_BUFFSIZE) samples[x] = ADC_samples[idx];
 								else samples[x] = 0;
 							}

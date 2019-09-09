@@ -24,6 +24,7 @@
 /* number of elements of sampled data */
 #define ADC_SAMPLES_BUFFSIZE    1024
 #define SCOPE_SAMPLES_BUFFSIZE  128
+#define ADC_OVERSAMPLING        4
 /*
  *  Simple table driven parser for a command line interface.
  *
