@@ -59,8 +59,8 @@ void printLocalIP(void)
     strncpy(my_ifreq.ifr_name , interfaceName , IFNAMSIZ - 1);
     ioctl(socketFD, SIOCGIFADDR, &my_ifreq);
     close(socketFD);
-    // Print local IP address for the given interface
-    printf("IP local address of %s is %s\n",interfaceName,inet_ntoa(((struct sockaddr_in *)&my_ifreq.ifr_addr)->sin_addr));	
+    // Print Omega's local IP address
+    printf("Omega's local IP address is %s\n",inet_ntoa(((struct sockaddr_in *)&my_ifreq.ifr_addr)->sin_addr));	
 }
 
 void forward_packet(int nbytes)
