@@ -17,10 +17,12 @@
 #include <string.h>  /* String function definitions */
 #include <unistd.h>  /* UNIX standard function definitions */
 #include <termios.h> /* POSIX terminal control definitions */
+#include <net/if.h>
 #include <netinet/in.h>
 #include <sys/ioctl.h>
 #include <sys/select.h>
 #include <sys/socket.h>
+#include <arpa/inet.h>
 #include <sys/time.h>
 #include "common.h"
 #include "packet.h"
@@ -31,7 +33,7 @@
 //#define FAKE_PACKET
 #define DUMP_BYTES		32
 
-static int fd; /* File descriptor for ttyACM channel */
+static int serial_fd; /* File descriptor for ttyACM channel */
 
 static int listen_sd, max_sd, new_sd;
 static int close_conn, osc_alive = TRUE;
@@ -45,6 +47,21 @@ fd_set rset, wset;
 timeval tv = { 2, 0 };
 
 queue rxq, txq;
+
+void printLocalIP(void)
+{
+    struct ifreq my_ifreq;
+    char interfaceName[] = "apcli0";
+    int socketFD = socket(AF_INET, SOCK_DGRAM, 0);
+    // Type of address to retrieve - IPv4 IP address
+    my_ifreq.ifr_addr.sa_family = AF_INET;
+    // Copy the interface name in the ifreq structure
+    strncpy(my_ifreq.ifr_name , interfaceName , IFNAMSIZ - 1);
+    ioctl(socketFD, SIOCGIFADDR, &my_ifreq);
+    close(socketFD);
+    // Print local IP address for the given interface
+    printf("IP local address of %s is %s\n",interfaceName,inet_ntoa(((struct sockaddr_in *)&my_ifreq.ifr_addr)->sin_addr));	
+}
 
 void forward_packet(int nbytes)
 {
@@ -78,7 +95,7 @@ void forward_packet(int nbytes)
 
 	// if txq is empty
 	if(!isQueueEmpty(&txq))
-		FD_SET(fd, &wset);
+		FD_SET(serial_fd, &wset);
 }
 
 // later on, this function should handle multiple connection, using fd loop
@@ -106,7 +123,7 @@ void handleSocketRead()
 			max_sd = new_sd;
 
 		pr_info("new incoming connection (max_sd = %d, new_sd = %d, listen_sd = %d, tty fd = %d)\n",
-				max_sd, new_sd, listen_sd, fd);
+				max_sd, new_sd, listen_sd, serial_fd);
 
 		return;
 	}
@@ -159,8 +176,8 @@ void handleRead()
 		forward_packet(nbytes);
 	}
 
-	if (FD_ISSET(fd, &rset)) {
-		nbytes = read(fd, buffer, BUFF_SIZE);
+	if (FD_ISSET(serial_fd, &rset)) {
+		nbytes = read(serial_fd, buffer, BUFF_SIZE);
 		if (nbytes == 0) {
 			osc_alive = FALSE;
 			pr_err("USB H/W has been disconnected...\n");
@@ -195,11 +212,11 @@ void handleWrite()
 {
 	int nbytes, dlen;
 
-	if (FD_ISSET(fd, &wset)) {
-		//pr_debug("fd write set!!");
+	if (FD_ISSET(serial_fd, &wset)) {
+		//pr_debug("serial_fd write set!!");
 		dlen = dequeue(&txq, buffer, WRITE_SIZE);
 		while (dlen) {
-			nbytes = write(fd, buffer, dlen);
+			nbytes = write(serial_fd, buffer, dlen);
 			pr_debug("write returned %d\n", nbytes);
 			if (nbytes < 0) {
 				pr_err("error = %d dlen=%d\n", nbytes, dlen);
@@ -210,7 +227,7 @@ void handleWrite()
 				dlen -= nbytes;
 		}
 		if(isQueueEmpty(&txq))
-			FD_CLR(fd, &wset);
+			FD_CLR(serial_fd, &wset);
 	}
 }
 
@@ -289,17 +306,19 @@ int main(int argc, char *argv[])
 	else
 		dev = TTY_DEV;
 
-	fd = open_port(dev);
-	if (fd < 0)
+	serial_fd = open_port(dev);
+	if (serial_fd < 0)
 		return 0;
 
-	init_queue(&rxq, fd);
-	init_queue(&txq, fd);
+	init_queue(&rxq, serial_fd);
+	init_queue(&txq, serial_fd);
 
-	set_baudrate(fd);
+	set_baudrate(serial_fd);
 
 	/* Flush anything already in the serial buffer */
-	tcflush(fd, TCIFLUSH);
+	tcflush(serial_fd, TCIFLUSH);
+
+	printLocalIP();
 
 	init_socket();
 
@@ -309,7 +328,7 @@ int main(int argc, char *argv[])
 		FD_ZERO(&rset);
 		FD_ZERO(&wset);
 		FD_SET(0, &rset);	// or stdin
-		FD_SET(fd, &rset);
+		FD_SET(serial_fd, &rset);
 		// listening socket
 		FD_SET(listen_sd, &rset);
 		if (new_sd) {
@@ -317,7 +336,7 @@ int main(int argc, char *argv[])
 		}
 
 		//pr_debug("select: round again\n");
-		//ret = select(fd+1, &rset, &wset, NULL, &tv);
+		//ret = select(serial_fd+1, &rset, &wset, NULL, &tv);
 		ret = select(max_sd+1, &rset, &wset, NULL, NULL);
 		//pr_debug("select: returned %d\n", ret);
 
@@ -344,7 +363,7 @@ int main(int argc, char *argv[])
 	close(listen_sd);
 	close(max_sd);
 	close(new_sd);
-	close(fd);
+	close(serial_fd);
 
 	return 0;
 }

@@ -53,7 +53,7 @@ void set_baudrate(int fd)
 	/* Get the current options for the port */
 	tcgetattr(fd, &options);
 
-	/* Set the baud rates to 19200 */
+	/* Set the baud rates to 115200 */
 	cfsetispeed(&options, B115200);
 	cfsetospeed(&options, B115200);
 
